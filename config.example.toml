@@ -25,6 +25,8 @@ quarter_sell = true          # 보유의 1/4 를 별지점 LOC 매도 (쿼터매
 compound = false             # true면 사이클이 끝날 때 수익/손실을 다음 사이클 원금에 반영
 
 [run]
+# "trade" = 봇이 직접 주문 / "alert" = 주문은 안 하고 '오늘 넣을 주문'과 마감 결과만 알림 (직접 주문할 때)
+mode = "trade"
 dry_run = true               # true = 주문을 넣지 않고 계획만 알림. 충분히 확인한 뒤 false 로!
 order_offset_minutes = 15    # 정규장 시작 후 N분에 주문
 order_cutoff_minutes = 20    # 정규장 마감 N분 전부터는 새로 주문하지 않음 (LOC 접수 마감 대비)

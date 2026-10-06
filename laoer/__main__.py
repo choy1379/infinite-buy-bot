@@ -97,7 +97,7 @@ def cmd_kakao_login(cfg: Config) -> int:
 
 
 def latest_day(bot: Bot) -> str | None:
-    days = [d for d, v in bot.state.days.items() if v.get("status") in ("placed", "dry_run", "placing")]
+    days = [d for d, v in bot.state.days.items() if v.get("status") in ("placed", "dry_run", "alert", "placing")]
     return max(days) if days else None
 
 

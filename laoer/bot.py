@@ -146,7 +146,7 @@ class Bot:
 
     def _finish_cycle(self, cycle: dict, date: str, *, outside: bool = False) -> dict:
         profit = _d(cycle["sold"]) - _d(cycle["bought"]) - _d(cycle["fees"])
-        done = {**cycle, "ended": date, "profit": str(profit), "closed_outside": outside}
+        done = {**cycle, "ended": date, "profit": str(profit), "closed_outside": outside, "alert": self.cfg.run.alert_only}
         self.state.history.append(done)
         self.state.cycle = None
         return done
@@ -235,7 +235,7 @@ class Bot:
             self._cancel_open(prev)
             kept = [dict(e, replaced=True) for e in prev.get("orders", []) if e.get("order_id")]
 
-        if self.cfg.run.skip_if_open_orders and not force:
+        if self.cfg.run.skip_if_open_orders and not force and not self.cfg.run.alert_only:
             opens = self.toss.open_orders(self.symbol)
             if opens:
                 rec = {"status": "blocked", "attempt": attempt, "session_end": session.end.isoformat(), "open_orders": len(opens)}
@@ -254,9 +254,10 @@ class Bot:
                 return rec
 
         plan, cycle, cash = self.make_plan(date, mutate=True)
-        dry = self.cfg.run.dry_run
+        alert = self.cfg.run.alert_only
+        dry = alert or self.cfg.run.dry_run
         rec = {
-            "status": "dry_run" if dry else "placing",
+            "status": "alert" if alert else "dry_run" if dry else "placing",
             "attempt": attempt,
             "session_start": session.start.isoformat(),
             "session_end": session.end.isoformat(),
@@ -333,6 +334,8 @@ class Bot:
             return "pending"
 
         cycle = self.state.cycle
+        if day.get("status") == "alert":
+            return self._report_alert(date, day, cycle)
         if cycle and cycle.get("id") == day.get("cycle_id") and not day.get("applied"):
             for e in day.get("orders", []):
                 key = "bought" if e["side"] == "BUY" else "sold"
@@ -353,12 +356,48 @@ class Bot:
             self.notifier.send(self._cycle_message(completed))
         return "done"
 
+    def _report_alert(self, date: str, day: dict, cycle: dict | None) -> str:
+        """알림 전용: 직접 넣은 주문의 체결 내역은 모르므로 장 시작 전/후 잔고를 비교한다."""
+        h = self.toss.holding(self.symbol)
+        qty, avg = (h.qty, h.avg) if h else (ZERO, ZERO)
+        qty0, avg0 = _d(day.get("qty_before")), _d(day.get("avg_before"))
+        if cycle and cycle.get("id") == day.get("cycle_id") and not day.get("applied"):
+            added = qty * avg - qty0 * avg0
+            if qty > qty0 and added > 0:
+                cycle["bought"] = str((_d(cycle["bought"]) + added).quantize(CENT))
+            day["applied"] = True
+        day.update(reported=True, qty_after=str(qty), avg_after=str(avg))
+        completed = None
+        if cycle and int(qty0) >= 1 and int(qty) < 1:
+            completed = self._finish_cycle(cycle, date)
+        self.state.save()
+
+        mmdd = date[5:].replace("-", "/")
+        diff = qty - qty0
+        lines = []
+        if diff:
+            lines.append(f"보유 {qty_str(qty0)} → {qty_str(qty)}주 ({'+' if diff > 0 else ''}{qty_str(diff)}주)")
+        else:
+            lines.append(f"보유 변화 없음 ({qty_str(qty)}주) — 체결이 없었거나 주문을 안 넣었어요")
+        if int(qty) >= 1:
+            if avg != avg0:
+                lines.append(f"평단 {usd(avg0)} → {usd(avg)}")
+            unit = _d(day.get("unit"))
+            t_text = f" · T {t_value(qty, avg, unit)}/{self.cfg.params.splits}" if unit > 0 else ""
+            lines.append(f"현재가 {usd(h.last_price)} · 평가손익 {pct(h.pl_rate)}{t_text}")
+        if cycle:
+            lines.append(f"사이클 #{cycle['id']} · {cycle.get('trading_days', 0)}거래일째")
+        self.notifier.send(Message(f"📊 {self.symbol} 장 마감 결과 · {mmdd}", lines, "success" if diff else "info"))
+        if completed:
+            self.notifier.send(self._cycle_message(completed))
+        return "done"
+
     # --------------------------------------------------------------- messages
     def _placed_message(self, date: str, plan: Plan, rec: dict, cycle: dict) -> Message:
         status = rec["status"]
-        head = {"dry_run": "🧪 [모의] ", "preview": "🔎 [미리보기] "}.get(status, "📝 ")
+        head = {"dry_run": "🧪 [모의] ", "preview": "🔎 [미리보기] ", "alert": "🔔 "}.get(status, "📝 ")
         phase = PHASE_LABELS.get(plan.phase, plan.phase)
-        title = f"{head}{self.symbol} 주문 · {date[5:].replace('-', '/')} · {phase}"
+        title = f"{head}{self.symbol} {'오늘 넣을 주문' if status == 'alert' else '주문'} · {date[5:].replace('-', '/')} · {phase}"
         if plan.phase != "first":
             title += f" T{plan.t}"
         lines = []
@@ -382,6 +421,8 @@ class Bot:
         lines.append(f"매수가능 {usd(rec['cash'])}")
         if status == "dry_run":
             lines.append("모의 실행이라 실제 주문은 넣지 않았습니다. (run.dry_run = false 로 실거래)")
+        if status == "alert" and new_orders:
+            lines.append("토스증권 앱에서 위 주문을 직접 넣으세요. LOC = 장마감 지정가, 지정가 = 당일 지정가")
         errors = sum(1 for e in new_orders if e.get("error"))
         level = "error" if errors and errors == len(new_orders) else "warn" if errors or plan.notes else "info"
         return Message(title, lines, level)
@@ -413,6 +454,17 @@ class Bot:
         return Message(title, lines, "success" if filled_any else "info")
 
     def _cycle_message(self, done: dict) -> Message:
+        if done.get("alert"):
+            return Message(
+                f"🎉 {self.symbol} 사이클 #{done['id']} 완료",
+                [
+                    "보유가 0주가 되어 사이클이 끝난 것으로 봅니다.",
+                    f"이번 사이클 매수 원가(추정) {usd(done['bought'])} · {done.get('trading_days', 0)}거래일",
+                    "실현손익은 토스증권 앱 거래내역에서 확인하세요.",
+                    "다음 정규장부터 새 사이클 첫 매수를 안내합니다.",
+                ],
+                "success",
+            )
         profit, seed = _d(done["profit"]), _d(done["seed"])
         lines = [
             f"매수 {usd(done['bought'])} · 매도 {usd(done['sold'])} · 비용 {usd(done['fees'])}",
@@ -431,7 +483,7 @@ class Bot:
         price = self.toss.price(self.symbol)
         cash = self.toss.buying_power("USD")
         cycle = self.state.cycle
-        lines = [f"계좌 {self.toss.account_seq} · {'모의(DRY-RUN)' if self.cfg.run.dry_run else '실거래(LIVE)'}"]
+        lines = [f"계좌 {self.toss.account_seq} · {self.mode_label()}"]
         unit = _d(cycle["unit"]) if cycle else (self.cfg.capital_usd / self.cfg.params.splits).quantize(CENT, ROUND_FLOOR)
         if h and int(h.qty) >= 1:
             lines.append(f"보유 {qty_str(h.qty)}주 · 평단 {usd(h.avg)} · 평가손익 {pct(h.pl_rate)}")
@@ -454,6 +506,11 @@ class Bot:
             lines.append(f"완료 사이클 {len(self.state.history)}개 · 누적 실현손익 {usd(total)}")
         return Message(f"ℹ️ {self.symbol} 무매봇 상태", lines)
 
+    def mode_label(self) -> str:
+        if self.cfg.run.alert_only:
+            return "알림 전용(주문 안 함)"
+        return "모의(DRY-RUN)" if self.cfg.run.dry_run else "실거래(LIVE)"
+
     # -------------------------------------------------------------- scheduler
     def tick(self) -> float:
         """할 일을 하고, 다음에 깨어날 때까지의 초를 돌려준다."""
@@ -471,7 +528,7 @@ class Bot:
                         "warn",
                     )
                 )
-            if day.get("status") in ("placed", "dry_run") and not day.get("reported") and day.get("session_end"):
+            if day.get("status") in ("placed", "dry_run", "alert") and not day.get("reported") and day.get("session_end"):
                 if now >= self.report_due(_dt(day["session_end"])):
                     if self.report(date) == "pending":
                         return 300
@@ -502,7 +559,7 @@ class Bot:
         if day.get("status") == "failed" and day.get("attempt", 1) < 3 and now < cutoff:
             self.place(s, force=True)
             return 600
-        if day.get("status") in ("placed", "dry_run") and not day.get("reported"):
+        if day.get("status") in ("placed", "dry_run", "alert") and not day.get("reported"):
             return max(30.0, (self.report_due(s.end) - now).total_seconds())
         return max(60.0, (s.end - now).total_seconds() + 60)
 
@@ -517,7 +574,7 @@ class Bot:
 
     def run_forever(self) -> None:
         p = self.cfg.params
-        mode = "모의(DRY-RUN)" if self.cfg.run.dry_run else "실거래(LIVE)"
+        mode = self.mode_label()
         self.notifier.send(
             Message(
                 f"🤖 {self.symbol} 무매봇 시작 · {mode}",

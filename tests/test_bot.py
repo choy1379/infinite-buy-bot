@@ -143,6 +143,7 @@ capital_usd = 10000
 splits = 20
 target_pct = 15
 [run]
+mode = "{mode}"
 dry_run = {dry_run}
 report_not_before_kst = "{not_before}"
 state_dir = "state"
@@ -161,9 +162,9 @@ class BotFlowTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def make_bot(self, dry_run=False, not_before=""):
+    def make_bot(self, dry_run=False, not_before="", mode="trade"):
         path = Path(self.tmp.name) / "config.toml"
-        path.write_text(CONFIG.format(dry_run=str(dry_run).lower(), not_before=not_before), encoding="utf-8")
+        path.write_text(CONFIG.format(mode=mode, dry_run=str(dry_run).lower(), not_before=not_before), encoding="utf-8")
         cfg = load_config(path)
         state = State(cfg.run.state_dir / "state.json")
         return Bot(cfg, self.broker, Notifier([self.capture]), state, clock=lambda: self.now[0], sleep=lambda s: None)
@@ -306,6 +307,38 @@ class BotFlowTest(unittest.TestCase):
         pending = [o for o in self.broker.orders.values() if o["status"] == "PENDING"]
         self.assertEqual(len(pending), 4)
         self.assertTrue(all(o["cid"].endswith("-r2") for o in pending))
+
+
+    def test_alert_mode_never_orders_and_reports_holdings_change(self):
+        self.broker.manual_open = [{"orderId": "manual"}]  # 직접 넣은 주문이 있어도 정상
+        bot = self.make_bot(mode="alert")
+        self.at(2026, 10, 6, 22, 45)
+        bot.tick()
+        self.assertEqual(self.broker.orders, {})
+        msg = self.capture.messages[-1]
+        self.assertTrue(msg.title.startswith("🔔 TECL 오늘 넣을 주문"))
+        self.assertIn("매수 첫매수LOC 5주 @ $112.00", msg.lines)
+        self.assertTrue(any("직접 넣으세요" in line for line in msg.lines))
+
+        # 사용자가 앱에서 직접 산 결과
+        self.broker.qty, self.broker.avg, self.broker.last_price = D(5), D(100), D(100)
+        self.at(2026, 10, 7, 5, 20)
+        bot.tick()
+        report = self.capture.messages[-1]
+        self.assertIn("장 마감 결과", report.title)
+        self.assertIn("보유 0 → 5주 (+5주)", report.lines)
+        self.assertEqual(bot.state.cycle["bought"], "500.00")
+
+        # 다음 날 전량 매도 → 사이클 완료
+        self.at(2026, 10, 7, 22, 45)
+        bot.tick()
+        self.assertIn("오늘 넣을 주문", self.capture.titles()[-1])
+        self.broker.qty, self.broker.avg = D(0), D(0)
+        self.at(2026, 10, 8, 5, 20)
+        bot.tick()
+        self.assertIn("사이클 #1 완료", self.capture.titles()[-1])
+        self.assertTrue(any("토스증권 앱" in line for line in self.capture.messages[-1].lines))
+        self.assertEqual(self.broker.orders, {})
 
 
 if __name__ == "__main__":

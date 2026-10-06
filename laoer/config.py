@@ -27,6 +27,7 @@ class TossConfig:
 
 @dataclass(frozen=True)
 class RunConfig:
+    alert_only: bool  # mode = "alert": 주문 없이 오늘 낼 주문만 알려줌 (직접 주문용)
     dry_run: bool
     order_offset_minutes: int
     order_cutoff_minutes: int
@@ -127,7 +128,11 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
 
     r = raw.get("run", {})
     state_dir = Path(r.get("state_dir", "state"))
+    mode = str(r.get("mode", "trade")).lower()
+    if mode not in ("trade", "alert"):
+        raise ConfigError(f'[run] mode 는 "trade" 또는 "alert" 이어야 합니다: {mode!r}')
     run = RunConfig(
+        alert_only=mode == "alert",
         dry_run=bool(r.get("dry_run", True)),
         order_offset_minutes=int(r.get("order_offset_minutes", 15)),
         order_cutoff_minutes=int(r.get("order_cutoff_minutes", 20)),
