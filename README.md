@@ -130,6 +130,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 | `order [--force]` | 지금 바로 오늘 주문 (`--force`: 봇이 낸 주문을 취소하고 다시 냄) |
 | `report [--date YYYY-MM-DD]` | 체결 결과를 지금 확인해 알림 |
 | `status [--notify]` | 보유·T값·사이클 상태 (`--notify`면 알림으로도) |
+| `dashboard` | 모니터링 페이지 데이터를 지금 갱신 |
 | `notify-test` | 알림 테스트 |
 | `kakao-login` | 카카오 토큰 발급 |
 
@@ -145,7 +146,24 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 봇이 꺼져 있다가 켜져도 괜찮습니다. 이미 낸 날은 다시 내지 않고(상태 파일 + `clientOrderId` 멱등 키),
 마감 20분 전이 지나서 켜졌다면 그날은 건너뛰었다고 알려줍니다.
 
-## 카카오톡 설정
+## 모니터링 페이지
+
+폰에서도 보는 페이지: **https://choy1379.github.io/shibuya-sky-status/tecl.html**
+
+- 이 저장소는 **공개**라서 두 단계로 보여줍니다.
+  - 누구나: T값, 평가손익(%), 사이클, 다음 주문 시각, 날짜별 주문의 체결 여부, 완료 사이클 수익률(%)
+  - **비밀번호 입력 시**: 보유 수량·평단·현재가·평가금액·매수가능금액·원금, 주문 가격/수량/체결가, 실현손익($)
+- 금액 정보는 봇이 비밀번호로 **암호화해서** 올리고, 페이지가 브라우저 안에서 풉니다. 비밀번호는 어디로도 전송되지 않아요.
+  ("이 기기에서 기억"을 체크하면 그 브라우저에만 저장)
+- 봇이 주문·체결 리포트·오류 때, 그리고 3시간마다 `tecl-data` 브랜치의 `dashboard.json` 을 갱신합니다.
+
+설정:
+1. GitHub → 오른쪽 위 프로필 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
+   - Repository access: **Only select repositories → shibuya-sky-status**
+   - Permissions → Repository permissions → **Contents: Read and write**
+2. `config.toml` 의 `[dashboard]` 에 토큰과 비밀번호(8자 이상) 입력
+3. `python -m laoer dashboard` 로 한 번 올려보고 페이지 확인 → `stop.cmd` / `start.cmd` 로 봇 재시작
+
 
 카톡 알림은 내 카카오톡 **'나와의 채팅'** 으로 옵니다.
 

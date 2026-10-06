@@ -97,6 +97,9 @@ class Bot:
         self._cal: list[Session] = []
         self._cal_fetched: datetime | None = None
         self._error_sent: dict[str, datetime] = {}
+        self.dashboard = None  # laoer.dashboard.Dashboard (선택)
+        self.last_error: str | None = None
+        self.last_error_at: str | None = None
 
     @property
     def symbol(self) -> str:
@@ -317,6 +320,7 @@ class Bot:
             rec["status"] = "failed" if plan.orders and failures == len(plan.orders) else "placed"
         self.state.save()
         self.notifier.send(self._placed_message(date, plan, rec, cycle))
+        self._publish("order")
         return rec
 
     # ----------------------------------------------------------------- report
@@ -368,6 +372,7 @@ class Bot:
         self.notifier.send(self._report_message(date, day, h, cycle))
         if completed:
             self.notifier.send(self._cycle_message(completed))
+        self._publish("report")
         return "done"
 
     def _report_alert(self, date: str, day: dict, cycle: dict | None) -> str:
@@ -404,6 +409,7 @@ class Bot:
         self.notifier.send(Message(f"📊 {self.symbol} 장 마감 결과 · {mmdd}", lines, "success" if diff else "info"))
         if completed:
             self.notifier.send(self._cycle_message(completed))
+        self._publish("report")
         return "done"
 
     # --------------------------------------------------------------- messages
@@ -577,14 +583,24 @@ class Bot:
             return max(30.0, (self.report_due(s.end) - now).total_seconds())
         return max(60.0, (s.end - now).total_seconds() + 60)
 
+    def _publish(self, reason: str) -> None:
+        if not self.dashboard:
+            return
+        try:
+            self.dashboard.publish(self, reason)
+        except Exception as e:  # 대시보드 실패가 매매를 멈추면 안 된다
+            log.warning("대시보드 갱신 실패: %s", e)
+
     def _notify_error(self, err: Exception) -> None:
         key = str(err)[:200]
         now = self.clock()
+        self.last_error, self.last_error_at = key, now.isoformat()
         last = self._error_sent.get(key)
         if last and now - last < timedelta(hours=1):
             return
         self._error_sent[key] = now
         self.notifier.send(Message(f"🚨 {self.symbol} 무매봇 오류", [key, "5분 뒤 다시 시도합니다."], "error"))
+        self._publish("error")
 
     def run_forever(self, *, quiet: bool = False) -> None:
         p = self.cfg.params
@@ -597,11 +613,15 @@ class Bot:
             log.info(msg.title)
         else:
             self.notifier.send(msg)
+        self._publish("start")
         try:
             while True:
                 keep_awake(True)
                 try:
                     wait = self.tick()
+                    self.last_error = self.last_error_at = None
+                    if self.dashboard and self.dashboard.due(self.clock()):
+                        self._publish("heartbeat")
                 except Exception as e:  # 네트워크/API 오류로 봇이 죽지 않게
                     log.exception("tick 실패")
                     self._notify_error(e)

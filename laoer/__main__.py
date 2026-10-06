@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .bot import Bot
 from .config import Config, ConfigError, load_config
+from .dashboard import Dashboard, GitHubPublisher
 from .notify import (
     DiscordNotifier,
     KakaoNotifier,
@@ -71,7 +72,11 @@ def build_bot(cfg: Config) -> Bot:
         token_path=cfg.run.state_dir / "toss_token.json",
         account_seq=cfg.toss.account_seq,
     )
-    return Bot(cfg, toss, build_notifier(cfg), State(cfg.run.state_dir / "state.json"))
+    bot = Bot(cfg, toss, build_notifier(cfg), State(cfg.run.state_dir / "state.json"))
+    if cfg.dashboard:
+        d = cfg.dashboard
+        bot.dashboard = Dashboard(GitHubPublisher(d.github_token, d.repo, d.branch), d.password, d.heartbeat_minutes)
+    return bot
 
 
 def cmd_kakao_login(cfg: Config) -> int:
@@ -115,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--date", help="미국 영업일 YYYY-MM-DD (기본: 가장 최근 주문일)")
     p = sub.add_parser("status", help="보유/T값/사이클 상태")
     p.add_argument("--notify", action="store_true", help="상태를 알림으로도 보냄")
+    sub.add_parser("dashboard", help="모니터링 페이지 데이터를 지금 갱신")
     sub.add_parser("notify-test", help="디스코드/카톡 테스트 메시지")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     args = ap.parse_args(argv)
@@ -163,6 +169,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{s.date} 은 이미 처리됨 ({prev.get('status')}). 다시 내려면 --force")
                 return 1
             print(json.dumps(bot.place(s, force=args.force), ensure_ascii=False, indent=1))
+        elif args.cmd == "dashboard":
+            if not bot.dashboard:
+                print("config.toml 의 [dashboard] github_token / password 를 먼저 채우세요.")
+                return 1
+            bot.dashboard.publish(bot, "manual")
+            owner, repo = cfg.dashboard.repo.split("/", 1)
+            print(f"갱신 완료 → https://{owner}.github.io/{repo}/tecl.html")
         elif args.cmd == "report":
             date = args.date or latest_day(bot)
             if not date or date not in bot.state.days:

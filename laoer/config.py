@@ -52,6 +52,15 @@ class KakaoConfig:
 
 
 @dataclass(frozen=True)
+class DashboardConfig:
+    github_token: str
+    repo: str
+    branch: str
+    password: str
+    heartbeat_minutes: int
+
+
+@dataclass(frozen=True)
 class Config:
     toss: TossConfig
     symbol: str
@@ -61,6 +70,7 @@ class Config:
     run: RunConfig
     discord: DiscordConfig | None
     kakao: KakaoConfig | None
+    dashboard: DashboardConfig | None = None
 
 
 def _val(section: dict, key: str, env: str | None = None, default=None):
@@ -160,6 +170,21 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
         else None
     )
 
+    db = raw.get("dashboard", {})
+    gh_token = str(_val(db, "github_token", "TECL_DASHBOARD_TOKEN", ""))
+    dashboard = None
+    if gh_token:
+        password = str(_val(db, "password", "TECL_DASHBOARD_PASSWORD", ""))
+        if len(password) < 8:
+            raise ConfigError("[dashboard] password 는 8자 이상으로 정하세요 (공개 페이지의 금액 정보를 잠그는 비밀번호).")
+        dashboard = DashboardConfig(
+            github_token=gh_token,
+            repo=str(db.get("repo", "choy1379/shibuya-sky-status")),
+            branch=str(db.get("branch", "tecl-data")),
+            password=password,
+            heartbeat_minutes=int(db.get("heartbeat_minutes", 180)),
+        )
+
     return Config(
         toss=toss,
         symbol=symbol,
@@ -169,4 +194,5 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
         run=run,
         discord=discord,
         kakao=kakao,
+        dashboard=dashboard,
     )
