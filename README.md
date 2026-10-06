@@ -55,6 +55,22 @@
    - 디스코드: 서버 설정 → 연동 → 웹후크 → 새 웹후크 → 채널 선택 → **웹후크 URL 복사**
    - 카카오톡: 아래 [카카오톡 설정](#카카오톡-설정) 참고
 
+## Windows 빠른 설치 (더블클릭)
+
+1. Python 3.11+ 설치 (설치 화면에서 **Add python.exe to PATH** 체크)
+2. 이 폴더를 내려받기 (아래 둘 중 하나)
+   - Git: `git clone -b claude/awesome-tesla-i33q3e https://github.com/choy1379/shibuya-sky-status.git`
+   - 또는 GitHub에서 브랜치 `claude/awesome-tesla-i33q3e` 선택 → Code → **Download ZIP** → 압축 풀기
+3. `tecl-infinite-buy` 폴더에서
+
+| 파일 | 하는 일 |
+|---|---|
+| `setup.cmd` | 파이썬 확인 → `config.toml` 생성 → 자체 테스트 → 메모장으로 설정 열기 |
+| `kakao-login.cmd` | (카톡 쓸 때) 카카오 토큰 발급 |
+| `check.cmd` | 알림 테스트 + 상태 + 다음 장 주문 미리보기 |
+| `start.cmd` / `stop.cmd` | 봇을 백그라운드로 시작 / 중지 (로그: `state\bot.log`) |
+| `autostart-on.cmd` / `autostart-off.cmd` | 윈도우 로그인 시 자동 시작 켜기 / 끄기 |
+
 ## 설치 · 설정
 
 ```bash
