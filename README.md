@@ -70,6 +70,7 @@
 | `check.cmd` | 알림 테스트 + 상태 + 다음 장 주문 미리보기 |
 | `start.cmd` / `stop.cmd` | 봇을 백그라운드로 시작 / 중지 (로그: `state\bot.log`) |
 | `autostart-on.cmd` / `autostart-off.cmd` | 윈도우 로그인 시 자동 시작 켜기 / 끄기 |
+| `wake-task-on.cmd` / `wake-task-off.cmd` | 절전 중이어도 매일 22:50·23:50·05:30·06:30에 PC를 깨워 봇 재시작 (조용히) |
 
 ## 설치 · 설정
 

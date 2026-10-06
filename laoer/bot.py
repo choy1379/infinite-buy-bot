@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -45,6 +46,19 @@ def qty_str(v) -> str:
 
 def kst(dt: datetime) -> str:
     return dt.astimezone(KST).strftime("%m/%d %H:%M")
+
+
+def keep_awake(on: bool) -> None:
+    """Windows: 주문/리포트 중에는 PC가 절전으로 돌아가지 않게 붙잡는다 (사용자가 누른 절전은 못 막음)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))
+    except Exception:
+        pass
 
 
 def leg_label(leg: str) -> str:
@@ -572,23 +586,28 @@ class Bot:
         self._error_sent[key] = now
         self.notifier.send(Message(f"🚨 {self.symbol} 무매봇 오류", [key, "5분 뒤 다시 시도합니다."], "error"))
 
-    def run_forever(self) -> None:
+    def run_forever(self, *, quiet: bool = False) -> None:
         p = self.cfg.params
         mode = self.mode_label()
-        self.notifier.send(
-            Message(
-                f"🤖 {self.symbol} 무매봇 시작 · {mode}",
-                [f"원금 {usd(self.cfg.capital_usd)} · {p.splits}분할 · 목표 {p.target_pct}% · 별% {p.base}-{p.slope:.3g}T"],
-            )
+        msg = Message(
+            f"🤖 {self.symbol} 무매봇 시작 · {mode}",
+            [f"원금 {usd(self.cfg.capital_usd)} · {p.splits}분할 · 목표 {p.target_pct}% · 별% {p.base}-{p.slope:.3g}T"],
         )
+        if quiet:
+            log.info(msg.title)
+        else:
+            self.notifier.send(msg)
         try:
             while True:
+                keep_awake(True)
                 try:
                     wait = self.tick()
                 except Exception as e:  # 네트워크/API 오류로 봇이 죽지 않게
                     log.exception("tick 실패")
                     self._notify_error(e)
                     wait = 300
+                finally:
+                    keep_awake(False)
                 wait = min(max(wait, 30.0), 1800.0)
                 log.info("다음 확인까지 %.0f초 대기", wait)
                 self.sleep(wait)

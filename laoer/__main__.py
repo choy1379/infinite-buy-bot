@@ -106,7 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-c", "--config", default="config.toml", help="설정 파일 경로 (기본: config.toml)")
     ap.add_argument("-v", "--verbose", action="store_true")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("run", help="상시 실행: 매 정규장 주문 → 마감 후 체결 알림")
+    p = sub.add_parser("run", help="상시 실행: 매 정규장 주문 → 마감 후 체결 알림")
+    p.add_argument("--quiet", action="store_true", help="시작 알림을 보내지 않음 (절전 해제 시 재시작용)")
     sub.add_parser("plan", help="다음 정규장에 낼 주문을 계산만 해서 보여줌 (주문/상태 변경 없음)")
     p = sub.add_parser("order", help="다음(진행 중) 정규장 주문을 지금 바로 냄")
     p.add_argument("--force", action="store_true", help="이미 낸 날이어도 봇 주문을 취소하고 다시 냄")
@@ -141,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     bot = build_bot(cfg)
     try:
         if args.cmd == "run":
-            bot.run_forever()
+            bot.run_forever(quiet=args.quiet)
         elif args.cmd == "plan":
             print(bot.preview().text())
         elif args.cmd == "status":
