@@ -61,6 +61,12 @@ class DashboardConfig:
 
 
 @dataclass(frozen=True)
+class LiveConfig:
+    host: str
+    port: int  # 0 = 끔
+
+
+@dataclass(frozen=True)
 class Config:
     toss: TossConfig
     symbol: str
@@ -71,6 +77,7 @@ class Config:
     discord: DiscordConfig | None
     kakao: KakaoConfig | None
     dashboard: DashboardConfig | None = None
+    live: LiveConfig = LiveConfig("0.0.0.0", 8765)
 
 
 def _val(section: dict, key: str, env: str | None = None, default=None):
@@ -185,6 +192,14 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
             heartbeat_minutes=int(db.get("heartbeat_minutes", 180)),
         )
 
+    lv = raw.get("live", {})
+    try:
+        live = LiveConfig(host=str(lv.get("host", "0.0.0.0")), port=int(lv.get("port", 8765)))
+    except (TypeError, ValueError) as e:
+        raise ConfigError(f"[live] port 는 숫자여야 합니다: {e}") from e
+    if not 0 <= live.port <= 65535:
+        raise ConfigError("[live] port 는 0~65535 (0 = 끔)")
+
     return Config(
         toss=toss,
         symbol=symbol,
@@ -195,4 +210,5 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
         discord=discord,
         kakao=kakao,
         dashboard=dashboard,
+        live=live,
     )

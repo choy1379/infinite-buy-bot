@@ -1,4 +1,4 @@
-"""CLI: python -m laoer {run|plan|order|report|status|notify-test|kakao-login}"""
+"""CLI: python -m laoer {run|live|plan|order|report|status|dashboard|notify-test|kakao-login}"""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from .bot import Bot
 from .config import Config, ConfigError, load_config
 from .dashboard import Dashboard, GitHubPublisher
+from .live import LiveServer
 from .notify import (
     DiscordNotifier,
     KakaoNotifier,
@@ -79,6 +80,21 @@ def build_bot(cfg: Config) -> Bot:
     return bot
 
 
+def start_live(cfg: Config, bot: Bot, *, port: int | None = None) -> LiveServer | None:
+    port = cfg.live.port if port is None else port
+    if not port:
+        return None
+    dash = cfg.dashboard
+    url = f"https://raw.githubusercontent.com/{dash.repo}/{dash.branch}/dashboard.json" if dash else None
+    try:
+        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url)
+    except OSError as e:  # 포트가 이미 쓰이는 중 등 — 봇은 그대로 돈다
+        log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
+        return None
+    log.info("실시간 호가 페이지: http://localhost:%s/ (같은 와이파이의 폰은 http://<이 PC IP>:%s/)", srv.port, srv.port)
+    return srv
+
+
 def cmd_kakao_login(cfg: Config) -> int:
     if not cfg.kakao:
         print("config.toml 의 [notify.kakao] rest_api_key 를 먼저 채우세요.")
@@ -113,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("run", help="상시 실행: 매 정규장 주문 → 마감 후 체결 알림")
     p.add_argument("--quiet", action="store_true", help="시작 알림을 보내지 않음 (절전 해제 시 재시작용)")
+    p = sub.add_parser("live", help="실시간 호가 페이지만 띄움 (run 은 자동으로 같이 띄움)")
+    p.add_argument("--port", type=int, help="포트 (기본: config [live] port, 8765)")
     sub.add_parser("plan", help="다음 정규장에 낼 주문을 계산만 해서 보여줌 (주문/상태 변경 없음)")
     p = sub.add_parser("order", help="다음(진행 중) 정규장 주문을 지금 바로 냄")
     p.add_argument("--force", action="store_true", help="이미 낸 날이어도 봇 주문을 취소하고 다시 냄")
@@ -148,7 +166,17 @@ def main(argv: list[str] | None = None) -> int:
     bot = build_bot(cfg)
     try:
         if args.cmd == "run":
+            start_live(cfg, bot)
             bot.run_forever(quiet=args.quiet)
+        elif args.cmd == "live":
+            srv = start_live(cfg, bot, port=args.port or cfg.live.port or 8765)
+            if not srv:
+                return 1
+            print(f"실시간 호가 페이지: http://localhost:{srv.port}/  (Ctrl+C 로 종료)")
+            try:
+                srv.serve_forever()
+            except KeyboardInterrupt:
+                pass
         elif args.cmd == "plan":
             print(bot.preview().text())
         elif args.cmd == "status":

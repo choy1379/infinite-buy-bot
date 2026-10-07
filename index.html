@@ -114,9 +114,29 @@
   td.num, th.num { text-align: right; }
   .table-wrap { overflow-x: auto; }
 
+  .fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary h2 { margin: 0; }
+  .fold > summary::after { content: "펼치기 ▾"; margin-left: auto; color: var(--muted); font-size: 0.82rem; }
+  .fold[open] > summary::after { content: "접기 ▴"; }
+  .fold > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   .chart { padding: 0; overflow: hidden; height: 420px; }
   .chart .tradingview-widget-container, .chart .tradingview-widget-container__widget { height: 100%; }
   @media (max-width: 420px) { .chart { height: 360px; } }
+
+  .book { padding: 12px 16px; }
+  .book .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
+  .book table { font-size: 0.9rem; }
+  .book td { padding: 3px 8px; border: 0; position: relative; }
+  .book td.vol { width: 38%; }
+  .book td.px { text-align: center; font-weight: 600; width: 24%; }
+  .book .ask td.px { color: var(--sell); } .book .bid td.px { color: var(--buy); }
+  .book .ask td.vol:first-child, .book .bid td.vol:last-child { text-align: right; }
+  .book .lvl { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: 0.18; }
+  .book .ask .lvl { right: 0; background: var(--sell); } .book .bid .lvl { left: 0; background: var(--buy); }
+  .book .vol span { position: relative; }
+  .book tr.mid td { border-top: 1px solid var(--line); padding: 0; height: 1px; }
+  .book .err { color: var(--muted); font-size: 0.88rem; }
 
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
@@ -133,10 +153,15 @@
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
 
-  <section aria-label="시세">
-    <h2 id="chart-title">TECL 시세</h2>
+  <details class="fold" id="chart-fold" open>
+    <summary><h2 id="chart-title">TECL 시세</h2></summary>
     <div class="card chart" id="chart"></div>
-  </section>
+  </details>
+
+  <details class="fold" id="book-fold" open hidden>
+    <summary><h2>실시간 호가</h2></summary>
+    <div class="card book" id="book"></div>
+  </details>
 
   <section class="card lock" id="lock">
     <h2>🔒 금액 정보</h2>
@@ -162,6 +187,7 @@
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
     <p>시세·차트는 TradingView에서 브라우저가 바로 불러와서 봇 PC가 꺼져 있어도 보입니다.</p>
+    <p>실시간 호가는 봇 PC에서 띄운 페이지(<span class="mono">http://localhost:8765</span>, 같은 와이파이의 폰은 PC IP로 접속)에서만 보여요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
 </main>
@@ -362,7 +388,19 @@
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : darkMq.matches;
   }
+  // 접기/펼치기 상태는 칸마다 이 브라우저에 기억
+  function foldable(id, key, onToggle) {
+    const d = el(id);
+    try { if (localStorage.getItem(key) === 'closed') d.open = false; } catch (e) {}
+    d.addEventListener('toggle', () => {
+      try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch (e) {}
+      onToggle();
+    });
+    return d;
+  }
+  const fold = foldable('chart-fold', 'tecl-dashboard-fold', () => renderChart());
   function renderChart() {
+    if (!fold.open) return;   // 접혀 있으면 위젯을 불러오지 않음 (펼칠 때 불러옴)
     const sym = String((data && data.symbol) || 'TECL').toUpperCase();
     const dark = isDark();
     const key = `${sym}|${dark}`;
@@ -392,6 +430,50 @@
     box.firstElementChild.appendChild(s);
   }
   darkMq.addEventListener('change', renderChart);
+
+  // ---- 실시간 호가: 봇 PC가 띄운 페이지(python -m laoer run / live)에서만 보임.
+  //      GitHub Pages 에서는 호가 API가 없으니 시도하지 않음.
+  const LOCAL = !/\.github\.io$/i.test(location.hostname);
+  const BOOK_MS = 1000;
+  const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => { if (bookFold.open) pollBook(); });
+  let bookTimer = null, bookOk = false;
+  function renderBook(b) {
+    const asks = (b.asks || []).slice().reverse(), bids = b.bids || [];
+    const max = Math.max(1, ...asks.concat(bids).map(r => num(r.volume) || 0));
+    const vol = (r, side) => {
+      const w = Math.round((num(r.volume) || 0) / max * 100);
+      return `<td class="vol mono"><div class="lvl" style="width:${w}%"></div><span>${qty(r.volume)}</span></td>`;
+    };
+    const row = (r, side) => side === 'ask'
+      ? `<tr class="ask">${vol(r, side)}<td class="px mono">${usd(r.price)}</td><td class="vol"></td></tr>`
+      : `<tr class="bid"><td class="vol"></td><td class="px mono">${usd(r.price)}</td>${vol(r, side)}</tr>`;
+    const bestAsk = asks.length ? num(asks[asks.length - 1].price) : null, bestBid = bids.length ? num(bids[0].price) : null;
+    const spread = bestAsk !== null && bestBid !== null ? usd(bestAsk - bestBid) : '–';
+    const at = b.timestamp || b.fetchedAt;
+    el('book').innerHTML = (asks.length || bids.length) ? `
+      <div class="meta"><span>매도 잔량 · 가격 · 매수 잔량</span><span>스프레드 <span class="mono">${spread}</span> · <span class="mono">${at ? kst(at) : '–'}</span></span></div>
+      <table aria-label="호가">${asks.map(r => row(r, 'ask')).join('')}<tr class="mid"><td colspan="3"></td></tr>${bids.map(r => row(r, 'bid')).join('')}</table>`
+      : '<div class="err">지금은 호가가 없어요 (장이 닫혀 있을 수 있어요).</div>';
+  }
+  async function pollBook() {
+    clearTimeout(bookTimer);
+    if (!LOCAL) return;
+    if (bookOk && (!bookFold.open || document.hidden)) return;   // 접혀 있거나 안 보이면 쉬기
+    try {
+      const res = await fetch(`api/orderbook?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.status === 404) return;   // 봇이 띄운 페이지가 아님 → 호가 칸 숨긴 채 끝
+      const b = await res.json();
+      bookOk = true; bookFold.hidden = false;
+      if (!res.ok) el('book').innerHTML = `<div class="err">호가를 못 불러왔어요: ${esc(b.error || res.status)}</div>`;
+      else renderBook(b);
+    } catch (e) {
+      if (!bookOk) return;
+      el('book').innerHTML = '<div class="err">봇 PC에 연결이 안 돼요. 봇이 꺼졌거나 PC가 절전 중일 수 있어요.</div>';
+    }
+    bookTimer = setTimeout(pollBook, BOOK_MS);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollBook(); });
+  pollBook();
 
   function render() {
     if (!data) return;
