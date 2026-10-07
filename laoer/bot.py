@@ -364,6 +364,11 @@ class Bot:
         h = self.toss.holding(self.symbol)
         qty = h.qty if h else ZERO
         day.update(reported=True, qty_after=str(qty), avg_after=str(h.avg if h else ZERO))
+        flows = {"BUY": ZERO, "SELL": ZERO}
+        for e in day.get("orders", []):
+            flows[e["side"]] += _d(e.get("filled_amount"))
+        fees = sum((_d(e.get("fees")) for e in day.get("orders", [])), ZERO)
+        self._record_daily(date, day, h, qty, flows["BUY"], flows["SELL"], fees)
         sold_qty = sum((_d(e.get("filled_qty")) for e in day.get("orders", []) if e["side"] == "SELL"), ZERO)
         completed = None
         if cycle and int(qty) < 1 and _d(cycle["bought"]) > 0 and sold_qty > 0:
@@ -374,6 +379,31 @@ class Bot:
             self.notifier.send(self._cycle_message(completed))
         self._publish("report")
         return "done"
+
+    def _close_price(self, h) -> Decimal | None:
+        if h:
+            return h.last_price
+        try:  # 다 팔아서 보유가 없으면 현재가(장 마감 후라 종가)를 따로 조회
+            return self.toss.price(self.symbol)
+        except TossError as e:
+            log.warning("종가 조회 실패: %s", e)
+            return None
+
+    def _record_daily(self, date, day, h, qty, bought, sold, fees, *, close=None) -> None:
+        """일간 손익 = 마감 평가금 - (전일 종가 기준 평가금) - 매수금 + 매도금 - 수수료
+        일간 수익률 = 일간 손익 / (전일 종가 기준 평가금 + 매수금).  전일 종가가 없으면 주문 시점 가격으로."""
+        close = self._close_price(h) if close is None else close
+        if close is None:
+            return
+        prev = next((self.state.days[d].get("close") for d in sorted(self.state.days, reverse=True)
+                     if d < date and self.state.days[d].get("close")), None)
+        base_price = _d(prev) if prev else _d(day.get("price"))
+        v0 = _d(day.get("qty_before")) * base_price
+        pnl = qty * close - v0 - bought + sold - fees
+        base = v0 + bought
+        day["close"] = str(close)
+        day["pnl"] = str(pnl.quantize(CENT))
+        day["daily_pct"] = str((pnl / base * 100).quantize(CENT)) if base > 0 else None
 
     def _report_alert(self, date: str, day: dict, cycle: dict | None) -> str:
         """알림 전용: 직접 넣은 주문의 체결 내역은 모르므로 장 시작 전/후 잔고를 비교한다."""
@@ -386,6 +416,11 @@ class Bot:
                 cycle["bought"] = str((_d(cycle["bought"]) + added).quantize(CENT))
             day["applied"] = True
         day.update(reported=True, qty_after=str(qty), avg_after=str(avg))
+        # 직접 넣은 주문은 체결 금액을 모르므로 잔고 변화로 어림: 늘면 매입원가 증가분, 줄면 종가에 판 것으로
+        close = self._close_price(h)
+        bought = max(qty * avg - qty0 * avg0, ZERO) if qty > qty0 else ZERO
+        sold = (qty0 - qty) * close if qty < qty0 and close is not None else ZERO
+        self._record_daily(date, day, h, qty, bought, sold, ZERO, close=close)
         completed = None
         if cycle and int(qty0) >= 1 and int(qty) < 1:
             completed = self._finish_cycle(cycle, date)

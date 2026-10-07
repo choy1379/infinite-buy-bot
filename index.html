@@ -120,14 +120,6 @@
   .fold > summary::after { content: "펼치기 ▾"; margin-left: auto; color: var(--muted); font-size: 0.82rem; }
   .fold[open] > summary::after { content: "접기 ▴"; }
   .fold > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  .price-card h2 { margin: 0 0 4px; font-size: 0.9rem; color: var(--muted); font-weight: 600; }
-  .quote { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
-  .quote .px { font-size: 2rem; font-weight: 700; line-height: 1.2; border-radius: 6px; padding: 0 4px; margin-left: -4px; }
-  .quote .tick { font-size: 0.95rem; }
-  .quote .src { margin-left: auto; color: var(--muted); font-size: 0.82rem; }
-  .quote .flash { animation: flash 0.6s ease-out; }
-  @keyframes flash { from { background: var(--line); } to { background: transparent; } }
-  .price-card .tradingview-widget-container { min-height: 70px; }
   .err { color: var(--muted); font-size: 0.88rem; }
   .book { padding: 12px 16px; }
   .book .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
@@ -141,6 +133,28 @@
   .book .ask .lvl { right: 0; background: var(--sell); } .book .bid .lvl { left: 0; background: var(--buy); }
   .book .vol span { position: relative; }
   .book tr.mid td { border-top: 1px solid var(--line); padding: 0; height: 1px; }
+
+  .cal { padding: 12px; }
+  .cal-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cal-head .nav { padding: 2px 10px; font-size: 1.1rem; line-height: 1.4; }
+  .cal-head .nav:disabled { opacity: 0.35; cursor: default; }
+  .cal-sum { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
+  .cal-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .cal-wd { text-align: center; color: var(--muted); font-size: 0.78rem; padding-bottom: 2px; }
+  .cal-cell { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-height: 64px; padding: 4px 6px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; text-align: left; cursor: pointer; min-width: 0; }
+  .cal-cell.blank { border: 0; background: transparent; cursor: default; }
+  .cal-cell.none { opacity: 0.45; cursor: default; }
+  .cal-cell.pick { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .cal-cell .dn { font-size: 0.75rem; color: var(--muted); }
+  .cal-cell .pct { font-size: 0.86rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-cell .marks { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; }
+  .mk { font-style: normal; font-size: 0.66rem; font-weight: 600; padding: 0 4px; border-radius: 4px; line-height: 1.5; white-space: nowrap; }
+  .mk.BUY { color: var(--buy); background: var(--bad-bg); } .mk.SELL { color: var(--sell); background: color-mix(in srgb, var(--sell) 16%, transparent); }
+  .mk.note { color: var(--muted); border: 1px solid var(--line); }
+  .cal-foot { margin: 8px 0 0; color: var(--muted); font-size: 0.78rem; }
+  .day header h3 .mono { font-size: 0.88rem; margin-left: 6px; }
+  @media (max-width: 420px) { .cal-cell { min-height: 56px; padding: 3px 4px; } .cal-cell .pct { font-size: 0.74rem; } .mk { font-size: 0.6rem; padding: 0 2px; } }
 
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
@@ -156,11 +170,6 @@
   <div id="notice"></div>
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
-
-  <section class="card price-card" aria-live="off">
-    <h2 id="price-title">TECL 현재가</h2>
-    <div id="price"></div>
-  </section>
 
   <details class="fold" id="book-fold" open hidden>
     <summary><h2>실시간 호가</h2></summary>
@@ -190,7 +199,6 @@
 
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
-    <p>현재가는 봇 PC에서는 토스 시세를 1초마다, 다른 기기에서는 TradingView 시세를 보여줍니다.</p>
     <p>실시간 호가는 봇이 도는 PC에서만 보여요 (이 페이지 또는 <span class="mono">http://localhost:8765</span>). 같은 와이파이의 폰은 PC IP:8765로 접속하세요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
@@ -344,32 +352,89 @@
     el('relock').addEventListener('click', lockAgain);
   }
 
+  // ---- 날짜별 주문: 달력(월~금) + 고른 날의 주문 상세
+  let calMonth = null, calPick = null;   // 'YYYY-MM', 'YYYY-MM-DD'
+  const ym = d => d.slice(0, 7);
+  const shiftMonth = (m, k) => { const [y, mo] = m.split('-').map(Number); const t = new Date(Date.UTC(y, mo - 1 + k, 1)); return t.toISOString().slice(0, 7); };
+
+  function dayCard(d, s) {
+    const extra = DAYSTAT[d.status] ? ` · ${DAYSTAT[d.status]}` : '';
+    const head = `${PHASE[d.phase] || ''}${d.t && d.phase !== 'first' ? ` · T ${num(d.t).toFixed(2)}` : ''}${d.starPct && d.phase !== 'first' ? ` · 별% ${pct(d.starPct, 1)}` : ''}${extra}`;
+    const rows = (d.orders || []).map((o, i) => {
+      const so = s && s.orders ? s.orders[i] : null;
+      const label = o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg);
+      let detail = '';
+      if (so) {
+        detail = `${so.qty}주 @ ${usd(so.price)}`;
+        if (num(so.filledQty) > 0) detail += ` → ${qty(so.filledQty)}주 @ ${usd(so.filledAvg)}`;
+        if (so.error) detail += ` · ${esc(so.error)}`;
+      }
+      return `<div class="ord"><span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span>
+        <span>${label}${detail ? `<br><span class="detail mono">${detail}</span>` : ''}</span>
+        <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></div>`;
+    }).join('');
+    const daily = num(d.dailyPct) === null ? '' : `<span class="mono ${sign(d.dailyPct)}">일간 ${pct(d.dailyPct, 1)}${s && num(s.pnl) !== null ? ` (${num(s.pnl) >= 0 ? '+' : ''}${usd(s.pnl)})` : ''}</span>`;
+    const after = s && s.qtyAfter !== undefined && s.qtyAfter !== null
+      ? `<div class="after mono">마감 후 ${qty(s.qtyBefore)} → ${qty(s.qtyAfter)}주 · 평단 ${usd(s.avgAfter)}${s.close ? ` · 종가 ${usd(s.close)}` : ''}</div>` : '';
+    return `<article class="day"><header><h3>${md(d.date)} ${daily}</h3><span>${esc(head)}</span></header>${rows || '<div class="ord muted">주문 없음</div>'}${after}</article>`;
+  }
+
   function renderDays() {
     const days = data.days || [];
-    if (!days.length) { el('days').innerHTML = '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다.</div>'; return; }
-    const sec = {};
+    if (!days.length) { el('days').innerHTML = '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다. 가짜 데이터로 미리 보려면 주소 끝에 <span class="mono">?demo=1</span></div>'; return; }
+    const byDate = {}, sec = {};
+    for (const d of days) byDate[d.date] = d;
     if (secret) for (const d of secret.days || []) sec[d.date] = d;
-    el('days').innerHTML = days.map(d => {
-      const s = sec[d.date];
-      const extra = DAYSTAT[d.status] ? ` · ${DAYSTAT[d.status]}` : '';
-      const head = `${PHASE[d.phase] || ''}${d.t && d.phase !== 'first' ? ` · T ${num(d.t).toFixed(2)}` : ''}${d.starPct && d.phase !== 'first' ? ` · 별% ${pct(d.starPct, 1)}` : ''}${extra}`;
-      const rows = (d.orders || []).map((o, i) => {
-        const so = s && s.orders ? s.orders[i] : null;
-        const label = o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg);
-        let detail = '';
-        if (so) {
-          detail = `${so.qty}주 @ ${usd(so.price)}`;
-          if (num(so.filledQty) > 0) detail += ` → ${qty(so.filledQty)}주 @ ${usd(so.filledAvg)}`;
-          if (so.error) detail += ` · ${esc(so.error)}`;
-        }
-        return `<div class="ord"><span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span>
-          <span>${label}${detail ? `<br><span class="detail mono">${detail}</span>` : ''}</span>
-          <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></div>`;
-      }).join('');
-      const after = s && s.qtyAfter !== undefined && s.qtyAfter !== null
-        ? `<div class="after mono">마감 후 ${qty(s.qtyBefore)} → ${qty(s.qtyAfter)}주 · 평단 ${usd(s.avgAfter)}</div>` : '';
-      return `<article class="day"><header><h3>${md(d.date)}</h3><span>${esc(head)}</span></header>${rows || '<div class="ord muted">주문 없음</div>'}${after}</article>`;
-    }).join('');
+    const dates = Object.keys(byDate).sort();
+    const first = ym(dates[0]), last = ym(dates[dates.length - 1]);
+    if (!calMonth || calMonth < first || calMonth > last) calMonth = last;
+    if (!calPick || !byDate[calPick]) calPick = dates[dates.length - 1];
+
+    // 이달 요약: 일간 수익률을 이어 붙인 월간 수익률, 거래일, (잠금 해제 시) 손익 합계
+    const inMonth = dates.filter(d => ym(d) === calMonth);
+    let comp = 1, nPct = 0, pnl = 0, nPnl = 0;
+    for (const d of inMonth) {
+      const r = num(byDate[d].dailyPct); if (r !== null) { comp *= 1 + r / 100; nPct++; }
+      const p = sec[d] ? num(sec[d].pnl) : null; if (p !== null) { pnl += p; nPnl++; }
+    }
+    const monthPct = nPct ? (comp - 1) * 100 : null;
+    const [y, m] = calMonth.split('-').map(Number);
+
+    // 월~금 칸: 그 달 1일이 있는 주의 월요일부터
+    const cells = [];
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const lead = (start.getUTCDay() + 6) % 7;   // 월=0
+    for (let i = 0; i < Math.min(lead, 5); i++) cells.push('<div class="cal-cell blank"></div>');
+    for (let dt = new Date(start); dt.getUTCMonth() === m - 1; dt.setUTCDate(dt.getUTCDate() + 1)) {
+      const wd = dt.getUTCDay(); if (wd === 0 || wd === 6) continue;
+      const key = dt.toISOString().slice(0, 10), d = byDate[key];
+      if (!d) { cells.push(`<div class="cal-cell none"><span class="dn">${dt.getUTCDate()}</span></div>`); continue; }
+      const orders = d.orders || [];
+      const buys = orders.filter(o => o.side === 'BUY' && (o.status === 'filled' || o.status === 'partial')).length;
+      const sells = orders.filter(o => o.side === 'SELL' && (o.status === 'filled' || o.status === 'partial')).length;
+      const r = num(d.dailyPct);
+      const note = r === null ? (DAYSTAT[d.status] || (d.reported ? '' : '대기')) : '';
+      cells.push(`<button type="button" class="cal-cell${key === calPick ? ' pick' : ''}" data-date="${key}" aria-label="${md(key)} ${r === null ? '' : pct(r, 1)}">
+        <span class="dn">${dt.getUTCDate()}</span>
+        <span class="pct mono ${sign(r)}">${r === null ? '' : pct(r, 1)}</span>
+        <span class="marks">${buys ? `<i class="mk BUY">매수${buys > 1 ? buys : ''}</i>` : ''}${sells ? `<i class="mk SELL">매도${sells > 1 ? sells : ''}</i>` : ''}${note ? `<i class="mk note">${esc(note)}</i>` : ''}</span>
+      </button>`);
+    }
+    el('days').innerHTML = `
+      <div class="card cal">
+        <div class="cal-head">
+          <button type="button" class="ghost nav" id="cal-prev" ${calMonth <= first ? 'disabled' : ''} aria-label="이전 달">‹</button>
+          <strong>${y}년 ${m}월</strong>
+          <button type="button" class="ghost nav" id="cal-next" ${calMonth >= last ? 'disabled' : ''} aria-label="다음 달">›</button>
+          <span class="cal-sum">${monthPct === null ? '' : `월간 <span class="mono ${sign(monthPct)}">${pct(monthPct, 1)}</span>`}${nPnl ? ` · <span class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''} · ${inMonth.length}거래일</span>
+        </div>
+        <div class="cal-grid">${['월', '화', '수', '목', '금'].map(w => `<div class="cal-wd">${w}</div>`).join('')}${cells.join('')}</div>
+        <p class="cal-foot">미국 거래일 기준 · 일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금)</p>
+      </div>
+      ${dayCard(byDate[calPick], sec[calPick])}`;
+    el('cal-prev').onclick = () => { calMonth = shiftMonth(calMonth, -1); renderDays(); };
+    el('cal-next').onclick = () => { calMonth = shiftMonth(calMonth, 1); renderDays(); };
+    for (const b of el('days').querySelectorAll('.cal-cell[data-date]')) b.onclick = () => { calPick = b.dataset.date; renderDays(); };
   }
 
   function renderHistory() {
@@ -395,45 +460,6 @@
     return d;
   }
 
-  // ---- 현재가: 봇 PC 서버에 닿으면 토스 현재가(1초마다), 아니면 TradingView 시세 위젯(가격만, 차트 없음)
-  const TV_EXCHANGE = { TECL: 'AMEX' };   // TECL 은 NYSE Arca 상장 → TradingView 표기는 AMEX
-  const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
-  let tvKey = '', livePrice = null, lastTick = '';
-  const sym = () => String((data && data.symbol) || 'TECL').toUpperCase();
-  function isDark() {
-    const t = document.documentElement.dataset.theme;
-    return t ? t === 'dark' : darkMq.matches;
-  }
-  function renderLivePrice(b) {
-    el('price-title').textContent = `${sym()} 현재가`;
-    const px = num(b.lastPrice);
-    if (px === null) { el('price').innerHTML = '<div class="err">지금은 현재가가 없어요.</div>'; tvKey = ''; return; }
-    if (livePrice !== null && px !== livePrice) lastTick = px > livePrice ? 'up' : 'down';
-    const flash = livePrice !== null && px !== livePrice;
-    livePrice = px; tvKey = '';
-    const at = b.priceAt || b.fetchedAt;
-    el('price').innerHTML = `<div class="quote">
-      <span class="px mono ${lastTick}${flash ? ' flash' : ''}">${usd(px)}</span>
-      <span class="tick ${lastTick}">${lastTick === 'up' ? '▲' : lastTick === 'down' ? '▼' : ''}</span>
-      <span class="src">토스 · 1초마다 · <span class="mono">${at ? kst(at) : '–'}</span></span></div>`;
-  }
-  function renderTicker() {
-    if (livePrice !== null) return;   // 봇 PC 현재가를 쓰는 중
-    const s = sym(), dark = isDark(), key = `${s}|${dark}`;
-    el('price-title').textContent = `${s} 현재가`;
-    if (key === tvKey) return;   // 1분마다 다시 그리지 않음
-    tvKey = key;
-    const tvSym = TV_EXCHANGE[s] ? `${TV_EXCHANGE[s]}:${s}` : s;
-    const box = el('price');
-    box.innerHTML = '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
-    const sc = document.createElement('script');
-    sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js';
-    sc.async = true;
-    sc.onerror = () => { tvKey = ''; box.innerHTML = `<div class="err">현재가를 못 불러왔어요. 광고 차단기가 TradingView를 막고 있을 수 있어요.</div>`; };
-    sc.textContent = JSON.stringify({ symbol: tvSym, width: '100%', isTransparent: true, colorTheme: dark ? 'dark' : 'light', locale: 'kr' });
-    box.firstElementChild.appendChild(sc);
-  }
-  darkMq.addEventListener('change', renderTicker);
 
   // ---- 실시간 호가: 봇 PC가 띄운 서버(python -m laoer run / live)의 /api/orderbook.
   //      봇 PC가 띄운 페이지면 같은 서버, GitHub Pages 면 이 기기의 http://localhost:8765 (봇 PC에서만 응답).
@@ -479,27 +505,111 @@
       const b = await res.json();
       bookOk = true; bookFold.hidden = false;
       if (!res.ok) el('book').innerHTML = `<div class="err">호가를 못 불러왔어요: ${esc(b.error || res.status)}</div>`;
-      else {
-        renderLivePrice(b);
-        if (bookFold.open) renderBook(b);
-      }
+      else if (bookFold.open) renderBook(b);
     } catch (e) {
       if (!bookOk) return;
       el('book').innerHTML = '<div class="err">봇 PC에 연결이 안 돼요. 봇이 꺼졌거나 PC가 절전 중일 수 있어요.</div>';
-      if (livePrice !== null) { livePrice = null; renderTicker(); }
     }
     bookTimer = setTimeout(pollBook, BOOK_MS);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollBook(); });
   pollBook();
 
+  // ---- 가짜 데이터 (?demo=1): 실제 봇 데이터 없이 화면을 미리 보기 위한 모의 매매. 매번 같은 결과
+  const DEMO = new URLSearchParams(location.search).get('demo') === '1';
+  function demoData() {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(2 * Math.PI * rnd());
+    const r2 = v => Math.round(v * 100) / 100;
+    const SEED = 10000, SPLITS = 20, UNIT = SEED / SPLITS, TARGET = 15;
+    const dates = [];
+    for (let t = new Date(Date.UTC(2026, 6, 1)); t <= new Date(Date.UTC(2026, 9, 6)); t.setUTCDate(t.getUTCDate() + 1))
+      if (t.getUTCDay() % 6) dates.push(t.toISOString().slice(0, 10));
+    let close = 92, qty = 0, avg = 0, bought = 0, sold = 0, cycleId = 1, cycleStart = null, cycleDays = 0;
+    const pub = [], sec = [], hist = [], hsec = [];
+    dates.forEach((date, i) => {
+      const lastDay = i === dates.length - 1;
+      const p0 = close;
+      if (qty === 0) { cycleStart = date; cycleDays = 0; bought = sold = 0; }
+      cycleDays++;
+      const t = qty ? qty * avg / UNIT : 0;
+      const legs = [];
+      if (!qty) legs.push({ leg: 'first', side: 'BUY', tif: 'CLS', price: r2(p0 * 1.12), qty: Math.floor(UNIT / p0) });
+      else {
+        const star = TARGET - 1.5 * t, starPx = r2(avg * (1 + star / 100));
+        legs.push({ leg: 'avg', side: 'BUY', tif: 'CLS', price: r2(avg), qty: Math.max(1, Math.floor(UNIT / 2 / avg)) });
+        legs.push({ leg: 'star', side: 'BUY', tif: 'CLS', price: r2(starPx - 0.01), qty: Math.max(1, Math.floor(UNIT / 2 / starPx)) });
+        const q4 = Math.floor(qty / 4);
+        if (q4) legs.push({ leg: 'quarter', side: 'SELL', tif: 'CLS', price: starPx, qty: q4 });
+        legs.push({ leg: 'target', side: 'SELL', tif: 'DAY', price: r2(avg * 1.15), qty: qty - q4 });
+      }
+      const phase = !qty ? 'first' : t < SPLITS / 2 ? 'first_half' : 'second_half';
+      const dayT = qty ? t.toFixed(2) : null, starPct = qty ? (TARGET - 1.5 * t).toFixed(2) : null;
+      if (lastDay) {   // 오늘: 주문만 넣고 아직 마감 전
+        pub.push({ date, status: 'placed', phase, t: dayT, starPct, reported: false, dailyPct: null, orders: legs.map(o => ({ leg: o.leg, side: o.side, tif: o.tif, status: 'pending' })) });
+        sec.push({ date, price: String(p0), qtyBefore: String(qty), orders: legs.map(o => ({ leg: o.leg, price: String(o.price), qty: o.qty, filledQty: '0', filledAvg: null })) });
+        return;
+      }
+      close = r2(p0 * (1 + 0.035 * gauss() + 0.003));   // TECL 은 3배 레버리지라 하루 ±3~4% 가 흔함
+      const high = r2(Math.max(close, p0) * (1 + rnd() * 0.025));
+      const qty0 = qty;
+      let buyAmt = 0, sellAmt = 0, left = qty;
+      const fills = legs.map(o => {
+        let px = null;
+        if (o.tif === 'CLS') px = (o.side === 'BUY' ? close <= o.price : close >= o.price) ? close : null;
+        else px = high >= o.price ? o.price : null;
+        let q = px === null ? 0 : o.qty;
+        if (o.side === 'SELL') { q = Math.min(q, left); left -= q; }
+        if (q && o.side === 'BUY') { avg = (qty * avg + q * px) / (qty + q); qty += q; buyAmt += q * px; }
+        if (q && o.side === 'SELL') { qty -= q; sellAmt += q * px; }
+        return { q, px };
+      });
+      bought += buyAmt; sold += sellAmt;
+      const v0 = qty0 * p0, pnl = qty * close - v0 - buyAmt + sellAmt, base = v0 + buyAmt;
+      pub.push({ date, status: 'placed', phase, t: dayT, starPct, reported: true, dailyPct: base ? (pnl / base * 100).toFixed(2) : null,
+        orders: legs.map((o, k) => ({ leg: o.leg, side: o.side, tif: o.tif, status: fills[k].q ? 'filled' : 'unfilled' })) });
+      sec.push({ date, price: String(p0), qtyBefore: String(qty0), qtyAfter: String(qty), avgAfter: qty ? avg.toFixed(4) : '0', close: String(close), pnl: pnl.toFixed(2),
+        orders: legs.map((o, k) => ({ leg: o.leg, price: String(o.price), qty: o.qty, filledQty: String(fills[k].q), filledAvg: fills[k].px === null ? null : String(fills[k].px) })) });
+      if (qty0 && !qty) {   // 다 팔림 → 사이클 완료
+        const profit = sold - bought;
+        hist.unshift({ id: cycleId, started: cycleStart, ended: date, tradingDays: cycleDays, returnPct: (profit / SEED * 100).toFixed(2) });
+        hsec.unshift({ id: cycleId, seed: String(SEED), bought: bought.toFixed(2), sold: sold.toFixed(2), profit: profit.toFixed(2) });
+        cycleId++; avg = 0;
+      }
+    });
+    const now = new Date();
+    const tNow = qty ? qty * avg / UNIT : null;
+    return {
+      public: {
+        version: 1, symbol: 'TECL', updatedAt: now.toISOString(), mode: '가짜 데이터(DEMO)', splits: SPLITS, targetPct: String(TARGET), bot: {},
+        position: { hasPosition: qty > 0, t: tNow === null ? null : tNow.toFixed(4), plRate: qty ? String(close / avg - 1) : null },
+        cycle: { id: cycleId, started: cycleStart, tradingDays: cycleDays },
+        nextSession: null, days: pub.reverse(), history: hist, secret: null,
+      },
+      secret: {
+        holding: qty ? { qty: String(qty), avg: avg.toFixed(4), lastPrice: String(close), purchaseAmount: (qty * avg).toFixed(2) } : null,
+        price: String(close), cash: (SEED - bought + sold).toFixed(2),
+        cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
+        days: sec.reverse(), history: hsec,
+      },
+    };
+  }
+
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderTicker(); renderSecret(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderDays(); renderHistory();
   }
 
   async function load() {
+    if (DEMO) {
+      if (!data) { const d = demoData(); data = d.public; secret = d.secret; }
+      render();
+      el('lock').hidden = true;
+      el('notice').innerHTML = '<div class="notice warn">가짜 데이터로 보는 중이에요 (모의 매매 결과). 실제 화면은 주소에서 <span class="mono">?demo=1</span> 을 지우세요.</div>';
+      return;
+    }
     try {
       const res = await fetch(`${source()}${source().includes('?') ? '&' : '?'}t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -512,7 +622,6 @@
       }
       render();
     } catch (e) {
-      renderTicker();   // 봇 데이터가 없어도 시세는 보여줌
       el('status').innerHTML = '<span class="pill bad">불러오기 실패</span>';
       el('notice').innerHTML = `<div class="notice bad">데이터를 아직 못 불러왔어요 (${esc(e.message)}). 봇에서 <span class="mono">python -m laoer dashboard</span> 를 한 번 실행해 보세요.</div>`;
     }
