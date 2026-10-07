@@ -172,6 +172,13 @@ class TossClientTest(unittest.TestCase):
             c.place_order(symbol="TECL", side="BUY", tif="CLS", qty=0, price=D(1), client_order_id="x")
         self.assertEqual((cm.exception.status, cm.exception.code, cm.exception.request_id), (422, "invalid-quantity", "r9"))
 
+    def test_gzip_html_error_is_readable(self):
+        import gzip
+        from laoer.toss import _parse
+        page = b"<html><body><h1>403 Forbidden</h1><p>Your IP is not allowed</p></body></html>"
+        self.assertEqual(_parse(gzip.compress(page), "gzip"), {"raw": "403 Forbidden Your IP is not allowed"})
+        self.assertEqual(_parse(gzip.compress(b'{"error": {"code": "x"}}')), {"error": {"code": "x"}})
+
     def test_bad_credentials(self):
         with self.assertRaises(TossError) as cm:
             self.client(secret="wrong").price("TECL")

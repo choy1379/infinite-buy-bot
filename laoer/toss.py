@@ -9,9 +9,12 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
+import re
+import zlib
 import time
 import urllib.error
 import urllib.parse
@@ -52,13 +55,30 @@ class Holding:
     pl_rate: Decimal
 
 
-def _parse(raw: bytes):
+def _decompress(raw: bytes, encoding: str | None) -> bytes:
+    enc = (encoding or "").lower()
+    try:
+        if "gzip" in enc or raw[:2] == b"\x1f\x8b":
+            return gzip.decompress(raw)
+        if "deflate" in enc:
+            return zlib.decompress(raw)
+    except (OSError, zlib.error, EOFError):
+        pass
+    return raw
+
+
+def _parse(raw: bytes, encoding: str | None = None):
     if not raw:
         return {}
+    raw = _decompress(raw, encoding)
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return {"raw": raw[:500].decode("utf-8", "replace")}
+        text = raw.decode("utf-8", "replace")
+        if "<" in text and ">" in text:  # HTML 오류 페이지(방화벽 등)는 본문 글자만
+            text = re.sub(r"(?is)<(script|style).*?</\1>", " ", text)
+            text = re.sub(r"<[^>]+>", " ", text)
+        return {"raw": re.sub(r"\s+", " ", text).strip()[:300]}
 
 
 def _error_from(status: int, payload) -> TossError:
@@ -156,9 +176,10 @@ class TossClient:
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with self._opener.open(req, timeout=self.timeout) as resp:
-                return resp.status, resp.headers, _parse(resp.read())
+                return resp.status, resp.headers, _parse(resp.read(), resp.headers.get("Content-Encoding"))
         except urllib.error.HTTPError as e:
-            return e.code, e.headers, _parse(e.read())
+            headers = e.headers or {}
+            return e.code, e.headers, _parse(e.read(), headers.get("Content-Encoding"))
 
     def _call(self, method, path, *, params=None, json_body=None, form=None, auth=True, account=False, retry=True):
         url = self.base_url + path
@@ -206,7 +227,10 @@ class TossClient:
                 log.warning("%s %s 서버 오류 %d, 재시도 %d", method, path, status, attempt)
                 self._sleep(min(2**attempt, 30))
                 continue
-            raise _error_from(status, payload)
+            err = _error_from(status, payload)
+            if err.code in ("http-error", "unknown"):
+                err.args = (f"{method} {path} → {err}",)
+            raise err
 
     # ------------------------------------------------------------- endpoints
     def accounts(self) -> list[dict]:
