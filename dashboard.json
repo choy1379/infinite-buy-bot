@@ -1,7 +1,7 @@
 {
  "version": 1,
  "symbol": "TECL",
- "updatedAt": "2026-10-07T12:59:06.890662+00:00",
+ "updatedAt": "2026-10-07T13:16:34.169229+00:00",
  "mode": "실거래(LIVE)",
  "splits": 20,
  "targetPct": "15",
@@ -12,7 +12,7 @@
  "position": {
   "hasPosition": true,
   "t": "0.85",
-  "plRate": "-0.02"
+  "plRate": "-0.0212"
  },
  "cycle": {
   "id": 1,
@@ -48,9 +48,9 @@
  "secret": {
   "alg": "pbkdf2-sha256/hmac-ctr",
   "iter": 200000,
-  "salt": "lFkZ2jhgVSpsf341guviDw==",
-  "nonce": "ktwe2BkbsrIb31wipnXPBA==",
-  "ct": "yX1XxNoP52Wc6DHmQJ2EZQmOM/qRvBJZ9FDnwEDDGAus8Q9fjH5O9irOiqSZatpj/DIN1NnDa8qh4MBxbUDVAzSN8beyMXhNV+gvmi67OYjV7R761pStN0ZMhIy75OFKW4Ovd8hfZEh3RktSsIHjjEbHjXlIiKec+hazVWW3Elk2LEOlA7jhtyCJoFHcHOuvFG6NRz/sP8Empxeish3B2grNH1hDqq8zt0qpMAiGBFpGkakXgEU9V9xhhD/BeqIsTFvT5+8Di1bK+yxF1+9xvFQ1iVYRKVci3RfFN6c7mqT2nZ8dgncBek+oc8WuxOrw0TPjpaNVsMIQJ3sBaJZdn9yXOIukNu0Sok1EWCEch63H6A4ukWODBVumhoLF0hkMfON+AKlf/WjeUbmU7wcGosAUs3Uq8D2R0paEcuFhnkQ9oUq2NlrGkMBF96xPFbQa6DB0tJdNg5VrTjamJVkK2vVwueTRU5Xb7uBAqCIc1fuh5ca0UNwYdfw6ETxhJeX1XI/aQ49jJEWBVdaJN3Y3vpDOBhAJS+ldYOdfgmvSCUmZdI3eupiawuwUlyjCVlxLqEP0g2SDfgxCnUK3t8cR6kdXTU2OY8R2ZR4xusOCaMF0NHsoDTAKIZ5dG09GEhuEd8EqCS8TZhqmY+8SpvXZEwEKhXRJEbut4ccOXEo/Lt1mwkW3pOoWYpRGlQ==",
-  "mac": "uws11M0FNyT8z0mqR7e5uEYCpEVcsccH4ETq5XJA58c="
+  "salt": "Rd9ssZLxdL3/nmCJaBoxwg==",
+  "nonce": "FracVa4cj3XY71w2itqPxw==",
+  "ct": "lqqUfEpN2CPpEjRzaj2jmPFyRnDPoHWA6Y2hZtXRS+rmrpCpIekVmgu+9j4Ghw6D4GYFP6FmDvrMaFglENTuYcnk6iauRRgHCF22/QVdAAaOxv809NlaViTIPbYpJ/GcvAV8qLOBHc0pL8PSirjy7WbD0OSWxzLe915cAHi5eE8+VrkAV1rQloQWbATt6aJv5oOWuTy2WVkmtZCuylb9+xKK0BTY9tHlgXhmD0sDB6p/2oaW2IZSjXhAcN1LbxHg5PxSqVqM6IF1UFa4ydA76HiAFy2FmIAwWg3itvvVYQf992pBmEiw+ByX5j99JDPgNb7O8KCp47KntjbIcpRY2e/XtUnMa+oDhenn4dBbaElQzFXhmcYIkwocczf+zZ/acYjM11YoEiDc2GykoRLCCSAukouzSZOGVDEQyvX6ESC8APIHKHqm3Z7FLSnH0kjeUezYeaBneAAZh4a6tQ8S4rK3l803lGnGr20ZrNFcyrU++CO47nhDoo5RzJ4mIoXcCwRA6sE+Apuafq5Yz/ObH7bj12Hz5/GXKNlDVvO3NPDJSNt7hMhoxcfOAb44jLDT/YpJlofkqtJa8I8sq2hBI1Pwl91KT52PmO+VGe0zVqq+ySL21Wq12CL41CMlcLpHri92rGobe0VtB/YgkLq+0eu3SuXp7chvCIPAK8QButO/P1ecPYajPAGWui7+FQo=",
+  "mac": "yE7cTkBJAkE7cgxUl72by9dGIP2GtpBy4zxHfcN9Kqs="
  }
 }
