@@ -5,9 +5,10 @@ GitHub Pages 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 �
   /                -> index.html (GitHub Pages 와 같은 페이지)
   /dashboard.json  -> GitHub 의 dashboard.json 을 대신 받아 전달 (30초 캐시)
   /api/orderbook   -> 토스 GET /api/v1/orderbook (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회)
+  /api/market      -> '시장' 탭 선물 시세 (네이버/야후, 10초 캐시, laoer/market.py)
 를 제공한다. 페이지는 /api/orderbook 이 응답하면 '실시간 호가' 칸을 보여준다.
 GitHub Pages 페이지도 이 PC의 브라우저에서는 http://localhost:8765/api/orderbook 을 부를 수 있게
-/api/orderbook 에 CORS(+ Chrome 사설망 접근 preflight) 헤더를 붙인다.
+/api/* 에 CORS(+ Chrome 사설망 접근 preflight) 헤더를 붙인다.
 공개 시세와 이미 공개된 dashboard.json 만 내보내고, 계좌 정보는 다루지 않는다.
 """
 
@@ -21,6 +22,8 @@ import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+from .market import Market
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +83,8 @@ class LiveServer:
         page: Path = PAGE,
         orderbook_ttl: float = 1.0,
         dashboard_ttl: float = 30.0,
+        market: Market | None = None,
+        market_ttl: float = 10.0,
         opener: urllib.request.OpenerDirector | None = None,
         clock=time.monotonic,
     ):
@@ -89,6 +94,7 @@ class LiveServer:
         self._opener = opener or urllib.request.build_opener()
         self.orderbook = _Cache(lambda: orderbook_payload(symbol, toss.orderbook(symbol)), orderbook_ttl, clock)
         self.dashboard = _Cache(self._fetch_dashboard, dashboard_ttl, clock)
+        self.market = _Cache((market or Market()).snapshot, market_ttl, clock)
         self.httpd = ThreadingHTTPServer((host, port), self._handler())
         self.httpd.daemon_threads = True
 
@@ -103,6 +109,7 @@ class LiveServer:
 
     def _handler(self):
         server = self
+        API = {"/api/orderbook": self.orderbook, "/api/market": self.market}
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, fmt, *args):  # 초당 요청이 들어오니 bot.log 에 남기지 않음
@@ -128,7 +135,7 @@ class LiveServer:
                 self._send(status, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", cors)
 
             def do_OPTIONS(self):
-                if self.path.split("?", 1)[0] != "/api/orderbook":
+                if self.path.split("?", 1)[0] not in API:
                     self._json(404, {"error": "not found"})
                     return
                 self.send_response(204)
@@ -141,9 +148,9 @@ class LiveServer:
                 path = self.path.split("?", 1)[0]
                 if path in ("/", "/index.html"):
                     self._send(200, server.page.read_bytes(), "text/html; charset=utf-8")
-                elif path == "/api/orderbook":
+                elif path in API:
                     try:
-                        self._json(200, server.orderbook.get(), cors=True)
+                        self._json(200, API[path].get(), cors=True)
                     except Exception as e:
                         self._json(502, {"error": str(e)}, cors=True)
                 elif path == "/dashboard.json":

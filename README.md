@@ -134,6 +134,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 | `status [--notify]` | 보유·T값·사이클 상태 (`--notify`면 알림으로도) |
 | `dashboard` | 모니터링 페이지 데이터를 지금 갱신 |
 | `live` | 실시간 호가 페이지만 띄움 (`run` 은 자동으로 같이 띄움) |
+| `market` | '시장' 탭 선물 시세가 받아지는지 확인 (설정 없이 됨) |
 | `notify-test` | 알림 테스트 |
 | `kakao-login` | 카카오 토큰 발급 |
 
@@ -226,6 +227,13 @@ GitHub 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 있어�
 - 봇 없이 페이지만 띄우려면 `python -m laoer live`. 끄려면 `config.toml` 에 `[live]` `port = 0`.
 - 공개 시세와 이미 공개된 `dashboard.json` 만 내보내고 계좌 정보는 다루지 않아요.
 
+### 시장 탭
+
+페이지 위 **시장** 탭 (`#market` 으로 바로 열기, `?demo=1#market` 은 가짜 시세).
+
+- **선물 시세**: 코스피200 선물(18시~06시는 야간선물), WTI 원유, S&P500·나스닥100 E-mini. 네이버·야후 공개 시세를 봇 PC가 10초마다 대신 받아오므로(브라우저가 직접 못 부름) 호가처럼 **봇 PC에서 열었을 때만** 보여요. 비공식 주소라 바뀔 수 있어서, 안 뜨면 봇 PC에서 `python -m laoer market` 으로 확인하세요.
+- **미국 주식 히트맵**: TradingView 위젯이라 어디서나 보여요. 위쪽 메뉴로 S&P500·나스닥100 등을 바꿀 수 있어요.
+
 카톡 알림은 내 카카오톡 **'나와의 채팅'** 으로 옵니다.
 
 1. [Kakao Developers](https://developers.kakao.com) → 내 애플리케이션 → 애플리케이션 추가
@@ -301,6 +309,7 @@ laoer/
   notify.py     디스코드 웹훅, 카카오 나에게 보내기
   dashboard.py  모니터링 페이지 데이터 (암호화 후 GitHub에 올림)
   live.py       봇 PC의 실시간 호가 페이지 서버
+  market.py     시장 탭 선물 시세 (네이버·야후)
   config.py     config.toml 로딩
   state.py      state/state.json 저장
 index.html      모니터링 페이지 (GitHub Pages, 봇 PC에서는 실시간 호가 포함)

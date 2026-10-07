@@ -1,4 +1,4 @@
-"""CLI: python -m laoer {run|live|plan|order|report|status|dashboard|notify-test|kakao-login}"""
+"""CLI: python -m laoer {run|live|market|plan|order|report|status|dashboard|notify-test|kakao-login}"""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from .bot import Bot
 from .config import Config, ConfigError, load_config
 from .dashboard import Dashboard, GitHubPublisher
 from .live import LiveServer
+from .market import Market
 from .notify import (
     DiscordNotifier,
     KakaoNotifier,
@@ -117,6 +118,16 @@ def cmd_kakao_login(cfg: Config) -> int:
     return 0
 
 
+def cmd_market() -> int:
+    rows = Market().snapshot()["rows"]
+    for r in rows:
+        if "error" in r:
+            print(f"✗ {r['name']}: {r['error']}")
+        else:
+            print(f"✓ {r['name']}: {r['price']} ({r.get('change')}, {r.get('pct')}%) @ {r.get('at')}")
+    return 0 if all("error" not in r for r in rows) else 1
+
+
 def latest_day(bot: Bot) -> str | None:
     days = [d for d, v in bot.state.days.items() if v.get("status") in ("placed", "dry_run", "alert", "placing")]
     return max(days) if days else None
@@ -141,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("dashboard", help="모니터링 페이지 데이터를 지금 갱신")
     sub.add_parser("notify-test", help="디스코드/카톡 테스트 메시지")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
+    sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
@@ -148,6 +160,9 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(errors="replace")
         except (AttributeError, ValueError):
             pass
+
+    if args.cmd == "market":
+        return cmd_market()
 
     try:
         cfg = load_config(args.config, require_toss=args.cmd not in ("notify-test", "kakao-login"))
