@@ -15,6 +15,7 @@ from .config import Config, ConfigError, load_config
 from .dashboard import Dashboard, GitHubPublisher
 from .live import LiveServer
 from .market import Market
+from .tunnel import QuickTunnel
 from .notify import (
     DiscordNotifier,
     KakaoNotifier,
@@ -94,6 +95,12 @@ def start_live(cfg: Config, bot: Bot, *, port: int | None = None) -> LiveServer 
         log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
         return None
     log.info("실시간 호가 페이지: http://localhost:%s/ (같은 와이파이의 폰은 http://<이 PC IP>:%s/)", srv.port, srv.port)
+    if cfg.live.tunnel:
+        def on_url(url):
+            bot.live_url = url
+            bot._publish("tunnel")  # 새 주소를 대시보드(잠금 칸)에 올려 GitHub 페이지가 찾게 함
+
+        QuickTunnel(srv.port, on_url).start()
     return srv
 
 

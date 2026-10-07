@@ -225,6 +225,7 @@ GitHub 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 있어�
 - **봇 PC에서는 GitHub 페이지(https://choy1379.github.io/infinite-buy-bot/)에도 호가가 떠요.** 페이지가 이 PC의 `http://localhost:8765` 에 물어보기 때문이에요. 처음에 브라우저가 "이 기기의 다른 앱 및 서비스에 액세스" 같은 권한을 물으면 **허용**.
   다른 기기(폰)에서는 GitHub 페이지가 집 PC에 닿을 수 없어서(https 페이지는 공유기 안의 http 주소를 못 부름) 위의 PC IP 주소로 여세요.
   https 터널 주소가 있다면 `https://choy1379.github.io/infinite-buy-bot/?live=https://터널주소` 로 한 번 열면 그 브라우저에 기억돼요 (`?live=off` 로 해제).
+- **밖(폰 LTE·회사)에서도 보려면 Cloudflare 무료 터널**: 봇 PC에 `winget install Cloudflare.cloudflared` 로 설치하고 `config.toml` 의 `[live]` 에 `tunnel = true` 후 봇 재시작. 계정·도메인·카드 없이 무료(Cloudflare quick tunnel)이고, 봇이 `https://xxxx.trycloudflare.com` 주소를 받아 대시보드 **잠금 칸**에 올려요. GitHub 페이지에서 비밀번호로 잠금 해제하면 그 주소로 호가·시세가 떠요. 주소는 봇을 켤 때마다 바뀌지만 페이지가 알아서 따라가요. 무료 임시 터널이라 가끔 끊길 수 있고(봇이 다시 켬), 주소를 아는 사람은 공개 시세만 볼 수 있어요.
 - 봇 없이 페이지만 띄우려면 `python -m laoer live`. 끄려면 `config.toml` 에 `[live]` `port = 0`.
 - 공개 시세와 이미 공개된 `dashboard.json` 만 내보내고 계좌 정보는 다루지 않아요.
 

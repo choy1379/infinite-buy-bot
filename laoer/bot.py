@@ -98,6 +98,7 @@ class Bot:
         self._cal_fetched: datetime | None = None
         self._error_sent: dict[str, datetime] = {}
         self.dashboard = None  # laoer.dashboard.Dashboard (선택)
+        self.live_url = None  # 외부 접속 주소 (Cloudflare 터널). 비밀번호 칸으로만 공개
         self.fx_rate = None  # () -> 원/달러 (선택). 일간 손익을 원화로도 보여주는 용도, 못 받아도 무방
         self.last_error: str | None = None
         self.last_error_at: str | None = None

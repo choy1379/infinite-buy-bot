@@ -88,6 +88,13 @@ class PayloadTest(unittest.TestCase):
         day = json.loads(decrypt("pw-12345678", payload["secret"]))["days"][0]
         self.assertEqual((day["prevClose"], day["fx"]), ("248.26", "1383.20"))
 
+    def test_tunnel_url_only_in_secret(self):
+        bot = self.make_bot()
+        bot.live_url = "https://brave-otter.trycloudflare.com"
+        payload = build_payload(bot, password="pw-12345678")
+        self.assertNotIn("trycloudflare", json.dumps({k: v for k, v in payload.items() if k != "secret"}))
+        self.assertEqual(json.loads(decrypt("pw-12345678", payload["secret"]))["liveUrl"], bot.live_url)
+
     def test_no_password_means_no_secret(self):
         bot = self.make_bot()
         self.assertIsNone(build_payload(bot)["secret"])
