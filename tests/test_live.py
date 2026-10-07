@@ -20,12 +20,18 @@ class FakeToss:
     def __init__(self):
         self.calls = 0
         self.fail = None
+        self.quote_fail = False
 
     def orderbook(self, symbol):
         self.calls += 1
         if self.fail:
             raise self.fail
         return BOOK
+
+    def quote(self, symbol):
+        if self.quote_fail:
+            raise RuntimeError("price down")
+        return {"symbol": symbol, "timestamp": "2026-10-07T14:00:01Z", "lastPrice": "101.27", "currency": "USD"}
 
 
 class Clock:
@@ -113,6 +119,15 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(r.headers["Access-Control-Allow-Private-Network"], "true")
         _, page_headers, _ = self.get("/")
         self.assertIsNone(page_headers["Access-Control-Allow-Origin"])
+
+    def test_includes_last_price_and_survives_price_failure(self):
+        body = json.loads(self.get("/api/orderbook")[2])
+        self.assertEqual((body["lastPrice"], body["priceAt"]), ("101.27", "2026-10-07T14:00:01Z"))
+        self.toss.quote_fail = True
+        self.clock.t = 2
+        status, _, raw = self.get("/api/orderbook")
+        self.assertEqual(status, 200)
+        self.assertIsNone(json.loads(raw)["lastPrice"])
 
     def test_orderbook_error_is_502(self):
         self.toss.fail = RuntimeError("403 IP")

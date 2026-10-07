@@ -4,7 +4,7 @@ GitHub Pages 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 �
 봇 PC는 토스 API를 부를 수 있으니, 같은 index.html 을 여기서 직접 띄우고
   /                -> index.html (GitHub Pages 와 같은 페이지)
   /dashboard.json  -> GitHub 의 dashboard.json 을 대신 받아 전달 (30초 캐시)
-  /api/orderbook   -> 토스 GET /api/v1/orderbook (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회)
+  /api/orderbook   -> 토스 호가 + 현재가 (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회씩)
 를 제공한다. 페이지는 /api/orderbook 이 응답하면 '실시간 호가' 칸을 보여준다.
 GitHub Pages 페이지도 이 PC의 브라우저에서는 http://localhost:8765/api/orderbook 을 부를 수 있게
 /api/orderbook 에 CORS(+ Chrome 사설망 접근 preflight) 헤더를 붙인다.
@@ -87,7 +87,7 @@ class LiveServer:
         self.page = page
         self.dashboard_url = dashboard_url
         self._opener = opener or urllib.request.build_opener()
-        self.orderbook = _Cache(lambda: orderbook_payload(symbol, toss.orderbook(symbol)), orderbook_ttl, clock)
+        self.orderbook = _Cache(lambda: self._fetch_quote(toss), orderbook_ttl, clock)
         self.dashboard = _Cache(self._fetch_dashboard, dashboard_ttl, clock)
         self.httpd = ThreadingHTTPServer((host, port), self._handler())
         self.httpd.daemon_threads = True
@@ -95,6 +95,16 @@ class LiveServer:
     @property
     def port(self) -> int:
         return self.httpd.server_address[1]
+
+    def _fetch_quote(self, toss) -> dict:
+        payload = orderbook_payload(self.symbol, toss.orderbook(self.symbol))
+        try:  # 현재가가 실패해도 호가는 보여준다
+            q = toss.quote(self.symbol)
+            payload["lastPrice"], payload["priceAt"] = _str(q.get("lastPrice")), q.get("timestamp")
+        except Exception as e:
+            log.debug("현재가 조회 실패: %s", e)
+            payload["lastPrice"] = payload["priceAt"] = None
+        return payload
 
     def _fetch_dashboard(self) -> bytes:
         url = f"{self.dashboard_url}?t={int(time.time())}"

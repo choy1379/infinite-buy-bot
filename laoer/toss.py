@@ -253,12 +253,16 @@ class TossClient:
             self._account_seq = int(brokerage[0]["accountSeq"])
         return self._account_seq
 
-    def price(self, symbol: str) -> Decimal:
+    def quote(self, symbol: str) -> dict:
+        """현재가 원본: {symbol, timestamp, lastPrice, currency}"""
         result = self._call("GET", "/api/v1/prices", params={"symbols": symbol})["result"]
         for r in result:
             if r.get("symbol", "").upper() == symbol.upper():
-                return Decimal(r["lastPrice"])
+                return r
         raise TossError(404, "symbol-not-found", f"{symbol} 현재가가 없습니다")
+
+    def price(self, symbol: str) -> Decimal:
+        return Decimal(self.quote(symbol)["lastPrice"])
 
     def orderbook(self, symbol: str) -> dict:
         """호가: {timestamp, currency, asks: [{price, volume}] (낮은 가격순), bids (높은 가격순)}"""

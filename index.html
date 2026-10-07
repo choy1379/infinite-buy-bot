@@ -120,10 +120,15 @@
   .fold > summary::after { content: "펼치기 ▾"; margin-left: auto; color: var(--muted); font-size: 0.82rem; }
   .fold[open] > summary::after { content: "접기 ▴"; }
   .fold > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  .chart { padding: 0; overflow: hidden; height: 420px; }
-  .chart .tradingview-widget-container, .chart .tradingview-widget-container__widget { height: 100%; }
-  @media (max-width: 420px) { .chart { height: 360px; } }
-
+  .price-card h2 { margin: 0 0 4px; font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+  .quote { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+  .quote .px { font-size: 2rem; font-weight: 700; line-height: 1.2; border-radius: 6px; padding: 0 4px; margin-left: -4px; }
+  .quote .tick { font-size: 0.95rem; }
+  .quote .src { margin-left: auto; color: var(--muted); font-size: 0.82rem; }
+  .quote .flash { animation: flash 0.6s ease-out; }
+  @keyframes flash { from { background: var(--line); } to { background: transparent; } }
+  .price-card .tradingview-widget-container { min-height: 70px; }
+  .err { color: var(--muted); font-size: 0.88rem; }
   .book { padding: 12px 16px; }
   .book .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
   .book table { font-size: 0.9rem; }
@@ -136,7 +141,6 @@
   .book .ask .lvl { right: 0; background: var(--sell); } .book .bid .lvl { left: 0; background: var(--buy); }
   .book .vol span { position: relative; }
   .book tr.mid td { border-top: 1px solid var(--line); padding: 0; height: 1px; }
-  .book .err { color: var(--muted); font-size: 0.88rem; }
 
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
@@ -153,10 +157,10 @@
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
 
-  <details class="fold" id="chart-fold" open>
-    <summary><h2 id="chart-title">TECL 시세</h2></summary>
-    <div class="card chart" id="chart"></div>
-  </details>
+  <section class="card price-card" aria-live="off">
+    <h2 id="price-title">TECL 현재가</h2>
+    <div id="price"></div>
+  </section>
 
   <details class="fold" id="book-fold" open hidden>
     <summary><h2>실시간 호가</h2></summary>
@@ -186,7 +190,7 @@
 
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
-    <p>시세·차트는 TradingView에서 브라우저가 바로 불러와서 봇 PC가 꺼져 있어도 보입니다.</p>
+    <p>현재가는 봇 PC에서는 토스 시세를 1초마다, 다른 기기에서는 TradingView 시세를 보여줍니다.</p>
     <p>실시간 호가는 봇이 도는 PC에서만 보여요 (이 페이지 또는 <span class="mono">http://localhost:8765</span>). 같은 와이파이의 폰은 PC IP:8765로 접속하세요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
@@ -380,14 +384,6 @@
         ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
   }
 
-  // ---- 시세 차트: TradingView 위젯을 브라우저에서 바로 불러옴 (봇 업로드와 무관하게 실시간)
-  const TV_EXCHANGE = { TECL: 'AMEX' };   // TECL 은 NYSE Arca 상장 → TradingView 표기는 AMEX
-  const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
-  let chartKey = '';
-  function isDark() {
-    const t = document.documentElement.dataset.theme;
-    return t ? t === 'dark' : darkMq.matches;
-  }
   // 접기/펼치기 상태는 칸마다 이 브라우저에 기억
   function foldable(id, key, onToggle) {
     const d = el(id);
@@ -398,38 +394,46 @@
     });
     return d;
   }
-  const fold = foldable('chart-fold', 'tecl-dashboard-fold', () => renderChart());
-  function renderChart() {
-    if (!fold.open) return;   // 접혀 있으면 위젯을 불러오지 않음 (펼칠 때 불러옴)
-    const sym = String((data && data.symbol) || 'TECL').toUpperCase();
-    const dark = isDark();
-    const key = `${sym}|${dark}`;
-    if (key === chartKey) return;   // 1분마다 다시 그리지 않음
-    chartKey = key;
-    el('chart-title').textContent = `${sym} 시세`;
-    const css = getComputedStyle(document.documentElement);
-    const v = name => css.getPropertyValue(name).trim();
-    const tvSym = TV_EXCHANGE[sym] ? `${TV_EXCHANGE[sym]}:${sym}` : sym;
-    const box = el('chart');
-    box.style.height = '';
-    box.innerHTML = '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
-    const s = document.createElement('script');
-    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
-    s.async = true;
-    s.onerror = () => { chartKey = ''; box.style.height = 'auto'; box.innerHTML = `<div class="empty" style="border:0">차트를 못 불러왔어요. 광고 차단기가 TradingView를 막고 있을 수 있어요.<br><a href="https://www.tradingview.com/symbols/${tvSym.replace(':', '-')}/" target="_blank" rel="noopener">TradingView에서 ${esc(sym)} 보기</a></div>`; };
-    s.textContent = JSON.stringify({
-      symbols: [[sym, `${tvSym}|1D`]],
-      chartOnly: false, autosize: true, width: '100%', height: '100%',
-      locale: 'kr', colorTheme: dark ? 'dark' : 'light', isTransparent: false,
-      backgroundColor: v('--surface'), gridLineColor: v('--line'), fontColor: v('--muted'),
-      chartType: 'area', lineColor: v('--accent'), topColor: v('--accent') + '55', bottomColor: v('--accent') + '00',
-      lineWidth: 2, showVolume: false, hideDateRanges: false, hideMarketStatus: false, scalePosition: 'right', scaleMode: 'Normal',
-      fontFamily: v('--font-body'), valuesTracking: '1', changeMode: 'price-and-percent',
-      dateRanges: ['1d|1', '1m|30', '3m|60', '12m|1D', '60m|1W', 'all|1M'],
-    });
-    box.firstElementChild.appendChild(s);
+
+  // ---- 현재가: 봇 PC 서버에 닿으면 토스 현재가(1초마다), 아니면 TradingView 시세 위젯(가격만, 차트 없음)
+  const TV_EXCHANGE = { TECL: 'AMEX' };   // TECL 은 NYSE Arca 상장 → TradingView 표기는 AMEX
+  const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+  let tvKey = '', livePrice = null, lastTick = '';
+  const sym = () => String((data && data.symbol) || 'TECL').toUpperCase();
+  function isDark() {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === 'dark' : darkMq.matches;
   }
-  darkMq.addEventListener('change', renderChart);
+  function renderLivePrice(b) {
+    el('price-title').textContent = `${sym()} 현재가`;
+    const px = num(b.lastPrice);
+    if (px === null) { el('price').innerHTML = '<div class="err">지금은 현재가가 없어요.</div>'; tvKey = ''; return; }
+    if (livePrice !== null && px !== livePrice) lastTick = px > livePrice ? 'up' : 'down';
+    const flash = livePrice !== null && px !== livePrice;
+    livePrice = px; tvKey = '';
+    const at = b.priceAt || b.fetchedAt;
+    el('price').innerHTML = `<div class="quote">
+      <span class="px mono ${lastTick}${flash ? ' flash' : ''}">${usd(px)}</span>
+      <span class="tick ${lastTick}">${lastTick === 'up' ? '▲' : lastTick === 'down' ? '▼' : ''}</span>
+      <span class="src">토스 · 1초마다 · <span class="mono">${at ? kst(at) : '–'}</span></span></div>`;
+  }
+  function renderTicker() {
+    if (livePrice !== null) return;   // 봇 PC 현재가를 쓰는 중
+    const s = sym(), dark = isDark(), key = `${s}|${dark}`;
+    el('price-title').textContent = `${s} 현재가`;
+    if (key === tvKey) return;   // 1분마다 다시 그리지 않음
+    tvKey = key;
+    const tvSym = TV_EXCHANGE[s] ? `${TV_EXCHANGE[s]}:${s}` : s;
+    const box = el('price');
+    box.innerHTML = '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
+    const sc = document.createElement('script');
+    sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js';
+    sc.async = true;
+    sc.onerror = () => { tvKey = ''; box.innerHTML = `<div class="err">현재가를 못 불러왔어요. 광고 차단기가 TradingView를 막고 있을 수 있어요.</div>`; };
+    sc.textContent = JSON.stringify({ symbol: tvSym, width: '100%', isTransparent: true, colorTheme: dark ? 'dark' : 'light', locale: 'kr' });
+    box.firstElementChild.appendChild(sc);
+  }
+  darkMq.addEventListener('change', renderTicker);
 
   // ---- 실시간 호가: 봇 PC가 띄운 서버(python -m laoer run / live)의 /api/orderbook.
   //      봇 PC가 띄운 페이지면 같은 서버, GitHub Pages 면 이 기기의 http://localhost:8765 (봇 PC에서만 응답).
@@ -446,7 +450,7 @@
     return `${(base || 'http://localhost:8765').replace(/\/+$/, '')}/api/orderbook`;
   })();
   const BOOK_MS = 1000;
-  const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => { if (bookFold.open) pollBook(); });
+  const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => pollBook());
   let bookTimer = null, bookOk = false;
   function renderBook(b) {
     const asks = (b.asks || []).slice().reverse(), bids = b.bids || [];
@@ -468,17 +472,21 @@
   }
   async function pollBook() {
     clearTimeout(bookTimer);
-    if (bookOk && (!bookFold.open || document.hidden)) return;   // 접혀 있거나 안 보이면 쉬기
+    if (bookOk && document.hidden) return;   // 화면이 안 보이면 쉬기
     try {
       const res = await fetch(`${BOOK_URL}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.status === 404) return;   // 봇이 띄운 페이지가 아님 → 호가 칸 숨긴 채 끝
       const b = await res.json();
       bookOk = true; bookFold.hidden = false;
       if (!res.ok) el('book').innerHTML = `<div class="err">호가를 못 불러왔어요: ${esc(b.error || res.status)}</div>`;
-      else renderBook(b);
+      else {
+        renderLivePrice(b);
+        if (bookFold.open) renderBook(b);
+      }
     } catch (e) {
       if (!bookOk) return;
       el('book').innerHTML = '<div class="err">봇 PC에 연결이 안 돼요. 봇이 꺼졌거나 PC가 절전 중일 수 있어요.</div>';
+      if (livePrice !== null) { livePrice = null; renderTicker(); }
     }
     bookTimer = setTimeout(pollBook, BOOK_MS);
   }
@@ -488,7 +496,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderChart(); renderSecret(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderTicker(); renderSecret(); renderDays(); renderHistory();
   }
 
   async function load() {
@@ -504,7 +512,7 @@
       }
       render();
     } catch (e) {
-      renderChart();   // 봇 데이터가 없어도 시세는 보여줌
+      renderTicker();   // 봇 데이터가 없어도 시세는 보여줌
       el('status').innerHTML = '<span class="pill bad">불러오기 실패</span>';
       el('notice').innerHTML = `<div class="notice bad">데이터를 아직 못 불러왔어요 (${esc(e.message)}). 봇에서 <span class="mono">python -m laoer dashboard</span> 를 한 번 실행해 보세요.</div>`;
     }
