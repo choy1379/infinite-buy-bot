@@ -64,6 +64,7 @@ class DashboardConfig:
 class LiveConfig:
     host: str
     port: int  # 0 = 끔
+    tunnel: bool = False  # Cloudflare 임시 터널로 밖에서도 보기 (cloudflared 필요)
 
 
 @dataclass(frozen=True)
@@ -194,7 +195,7 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
 
     lv = raw.get("live", {})
     try:
-        live = LiveConfig(host=str(lv.get("host", "0.0.0.0")), port=int(lv.get("port", 8765)))
+        live = LiveConfig(host=str(lv.get("host", "0.0.0.0")), port=int(lv.get("port", 8765)), tunnel=bool(lv.get("tunnel", False)))
     except (TypeError, ValueError) as e:
         raise ConfigError(f"[live] port 는 숫자여야 합니다: {e}") from e
     if not 0 <= live.port <= 65535:

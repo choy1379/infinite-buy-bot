@@ -211,6 +211,7 @@ def build_payload(
             },
             "price": _s(price),
             "cash": _s(cash),
+            "liveUrl": getattr(bot, "live_url", None),
             "cycle": None if not cycle else {k: cycle.get(k) for k in ("seed", "unit", "bought", "sold", "fees", "adopted")},
             "days": sec_days,
             "history": history_sec,

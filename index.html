@@ -312,6 +312,7 @@
     try {
       secret = await decrypt(pw, data.secret);
       password = pw;
+      useTunnel(secret.liveUrl);
       el('lock').hidden = true;
       render();
     } catch (e) {
@@ -567,17 +568,27 @@
   //      봇 PC가 띄운 페이지면 같은 서버, GitHub Pages 면 이 기기의 http://localhost:8765 (봇 PC에서만 응답).
   //      다른 주소(예: https 터널)는 ?live=https://... 로 한 번 열면 이 브라우저에 기억 (?live=off 로 지움).
   const LIVE_KEY = 'tecl-dashboard-live';
-  const LIVE = (() => {
-    if (!/\.github\.io$/i.test(location.hostname)) return '';
-    let base = new URLSearchParams(location.search).get('live');
+  //      봇이 Cloudflare 터널을 켜 두면 그 주소가 잠금 칸에 실려 와서, 잠금 해제하면 자동으로 그 주소를 씀.
+  const ON_PAGES = /\.github\.io$/i.test(location.hostname);
+  const LIVE_PARAM = new URLSearchParams(location.search).get('live');
+  const liveBase = b => `${(b || 'http://localhost:8765').replace(/\/+$/, '')}/`;
+  let LIVE = (() => {
+    if (!ON_PAGES) return '';
+    let base = LIVE_PARAM;
     try {
       if (base === 'off') { localStorage.removeItem(LIVE_KEY); base = null; }
       else if (base) localStorage.setItem(LIVE_KEY, base);
       else base = localStorage.getItem(LIVE_KEY);
     } catch (e) {}
-    return `${(base || 'http://localhost:8765').replace(/\/+$/, '')}/`;
+    return liveBase(base);
   })();
-  const BOOK_URL = `${LIVE}api/orderbook`;
+  // 잠금 해제된 데이터에 봇의 터널 주소가 있으면 그걸로 (직접 ?live= 로 준 주소가 우선)
+  function useTunnel(url) {
+    if (!ON_PAGES || !url || (LIVE_PARAM && LIVE_PARAM !== 'off') || liveBase(url) === LIVE) return;
+    LIVE = liveBase(url);
+    try { localStorage.setItem(LIVE_KEY, url); } catch (e) {}
+    bookOk = false; pollBook(); pollMarket();
+  }
   const BOOK_MS = 1000;
   const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => pollBook());
   let bookTimer = null, bookOk = false;
@@ -603,7 +614,7 @@
     clearTimeout(bookTimer);
     if (bookOk && document.hidden) return;   // 화면이 안 보이면 쉬기
     try {
-      const res = await fetch(`${BOOK_URL}?t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetch(`${LIVE}api/orderbook?t=${Date.now()}`, { cache: 'no-store' });
       if (res.status === 404) return;   // 봇이 띄운 페이지가 아님 → 호가 칸 숨긴 채 끝
       const b = await res.json();
       bookOk = true; bookFold.hidden = false;
