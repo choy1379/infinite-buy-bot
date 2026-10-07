@@ -55,6 +55,13 @@ class ParseTest(unittest.TestCase):
         self.assertEqual((q["price"], q["change"], q["pct"]), (90.55, 1.11, 1.24))
         self.assertTrue(q["at"].endswith("+09:00"))
 
+    def test_day_close_is_labelled_as_such(self):
+        day = {"closePrice": "1,078.75", "compareToPreviousClosePrice": "-24.25", "fluctuationsRatio": "-2.20",
+               "marketStatus": "CLOSE", "localTradedAt": "2026-10-07T15:34:00+09:00"}
+        rows = {r["id"]: r for r in Market(opener=FakeOpener({"polling.finance.naver.com": day})).snapshot()["rows"]}
+        self.assertEqual(rows["k200f"]["name"], "코스피200 선물 (주간 종가)")
+        self.assertNotIn("closed", rows["k200f"])
+
     def test_missing_price_raises(self):
         with self.assertRaises(ValueError):
             parse_naver({"closePrice": None})

@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 KST = timezone(timedelta(hours=9))
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 
-# (id, 이름, 소스, 코드). 네이버는 주소 후보를 차례로 시도
+# (id, 이름, 소스, 코드). 네이버는 주소 후보를 차례로 시도. 네이버에는 야간선물 시세가 없어 코스피200은 주간만
 SYMBOLS = [
     ("k200f", "코스피200 선물", "naver", "FUT"),
     ("wti", "WTI 원유", "yahoo", "CL=F"),
@@ -82,7 +82,7 @@ def parse_naver(body: dict) -> dict:
         change = -abs(change) if change is not None else None
         pct = -abs(pct) if pct is not None else None
     at = _naver_time(d.get("localTradedAt") or d.get("tradedAt"))
-    return {"price": price, "change": change, "pct": pct, "at": at}
+    return {"price": price, "change": change, "pct": pct, "at": at, "closed": d.get("marketStatus") == "CLOSE"}
 
 
 def parse_yahoo(body: dict) -> dict:
@@ -125,8 +125,13 @@ class Market:
         row = {"id": sid, "name": name}
         try:
             row.update(self.quote(source, code))
-            if sid == "k200f" and is_night(row.get("at")):
-                row["name"] = "코스피200 야간선물"
+            if sid == "k200f":
+                # 네이버는 주간 시세만 줌(야간은 없음). 야간에 찍힌 값이면 야간선물, 아니면 주간 종가로 정직하게 표시
+                if is_night(row.get("at")):
+                    row["name"] = "코스피200 야간선물"
+                elif row.pop("closed", False):
+                    row["name"] = "코스피200 선물 (주간 종가)"
+            row.pop("closed", None)
         except Exception as e:
             log.debug("시세 %s 실패: %s", name, e)
             row["error"] = str(e) or type(e).__name__
