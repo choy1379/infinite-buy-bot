@@ -160,6 +160,22 @@
   .day header h3 .mono { font-size: 0.88rem; margin-left: 6px; }
   @media (max-width: 420px) { .cal-cell { min-height: 56px; padding: 3px 4px; } .cal-cell .pct { font-size: 0.74rem; } .mk { font-size: 0.6rem; padding: 0 2px; } }
 
+  main.wide { max-width: 1200px; }
+  .panel { display: grid; gap: 20px; min-width: 0; }
+  .panel[hidden] { display: none; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tabs button { background: transparent; color: var(--muted); border-radius: 8px 8px 0 0; padding: 8px 16px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .quotes { padding: 12px 16px; }
+  .quotes .qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .quotes td, .quotes th { padding: 8px 6px; white-space: nowrap; }
+  .quotes td.name { font-weight: 600; white-space: normal; }
+  .quotes td.at { color: var(--muted); font-size: 0.82rem; }
+  .heat { height: min(75vh, 720px); min-height: 420px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .heat .tradingview-widget-container, .heat .tradingview-widget-container__widget { height: 100%; width: 100%; }
+  @media (max-width: 480px) { .quotes .at { display: none; } .quotes td, .quotes th { padding: 8px 3px; } .quotes table { font-size: 0.84rem; } }
+  .src { margin: 6px 0 0; color: var(--muted); font-size: 0.8rem; }
+
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
   footer p { margin: 0; max-width: 65ch; }
@@ -170,6 +186,12 @@
 <main>
   <h1>TECL 무한매수<small id="subtitle">라오어 무한매수법 · 토스증권 자동매매</small></h1>
 
+  <div class="tabs" role="tablist" aria-label="화면">
+    <button type="button" role="tab" id="tabbtn-bot" aria-controls="tab-bot" aria-selected="true">무한매수</button>
+    <button type="button" role="tab" id="tabbtn-market" aria-controls="tab-market" aria-selected="false">시장</button>
+  </div>
+
+  <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
   <div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
   <div id="notice"></div>
 
@@ -208,6 +230,20 @@
     <p>실시간 호가는 봇이 도는 PC에서만 보여요 (이 페이지 또는 <span class="mono">http://localhost:8765</span>). 같은 와이파이의 폰은 PC IP:8765로 접속하세요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
+  </div>
+
+  <div class="panel" id="tab-market" role="tabpanel" aria-labelledby="tabbtn-market" hidden>
+    <section class="card quotes">
+      <div class="qhead"><h2>선물 시세</h2><span class="muted mono" id="mkt-at" style="font-size:0.82rem"></span></div>
+      <div id="mkt"><div class="err">불러오는 중…</div></div>
+      <p class="src">봇 PC가 네이버·야후 시세를 10초마다 대신 받아와요. 코스피200은 18시~06시엔 야간선물이에요. 지연 시세일 수 있어요.</p>
+    </section>
+    <section>
+      <h2>미국 주식 히트맵</h2>
+      <div class="heat" id="heat"></div>
+      <p class="src">TradingView 제공 · 색은 등락률, 크기는 시가총액. 위쪽 메뉴로 지수(S&amp;P500·나스닥100 등)를 바꿀 수 있어요.</p>
+    </section>
+  </div>
 </main>
 
 <script>
@@ -504,16 +540,17 @@
   //      봇 PC가 띄운 페이지면 같은 서버, GitHub Pages 면 이 기기의 http://localhost:8765 (봇 PC에서만 응답).
   //      다른 주소(예: https 터널)는 ?live=https://... 로 한 번 열면 이 브라우저에 기억 (?live=off 로 지움).
   const LIVE_KEY = 'tecl-dashboard-live';
-  const BOOK_URL = (() => {
-    if (!/\.github\.io$/i.test(location.hostname)) return 'api/orderbook';
+  const LIVE = (() => {
+    if (!/\.github\.io$/i.test(location.hostname)) return '';
     let base = new URLSearchParams(location.search).get('live');
     try {
       if (base === 'off') { localStorage.removeItem(LIVE_KEY); base = null; }
       else if (base) localStorage.setItem(LIVE_KEY, base);
       else base = localStorage.getItem(LIVE_KEY);
     } catch (e) {}
-    return `${(base || 'http://localhost:8765').replace(/\/+$/, '')}/api/orderbook`;
+    return `${(base || 'http://localhost:8765').replace(/\/+$/, '')}/`;
   })();
+  const BOOK_URL = `${LIVE}api/orderbook`;
   const BOOK_MS = 1000;
   const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => pollBook());
   let bookTimer = null, bookOk = false;
@@ -553,6 +590,87 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollBook(); });
   pollBook();
+
+  // ---- 시장 탭: 선물 시세(봇 PC의 /api/market) + TradingView 미국 주식 히트맵
+  const TAB_KEY = 'tecl-dashboard-tab';
+  const MKT_MS = 10000;
+  let mktTimer = null, heatLoaded = false;
+  const marketOpen = () => !el('tab-market').hidden;
+  function showTab(name, save) {
+    for (const t of ['bot', 'market']) {
+      el(`tab-${t}`).hidden = t !== name;
+      el(`tabbtn-${t}`).setAttribute('aria-selected', String(t === name));
+    }
+    document.querySelector('main').classList.toggle('wide', name === 'market');
+    if (save) {
+      try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
+      history.replaceState(null, '', name === 'market' ? '#market' : location.pathname + location.search);
+    }
+    if (name === 'market') { loadHeat(); pollMarket(); }
+  }
+  for (const t of ['bot', 'market']) el(`tabbtn-${t}`).addEventListener('click', () => showTab(t, true));
+
+  const dark = () => document.documentElement.dataset.theme === 'dark' ||
+    (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  function loadHeat() {
+    if (heatLoaded) return;
+    heatLoaded = true;
+    const box = document.createElement('div');
+    box.className = 'tradingview-widget-container';
+    box.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+    const sc = document.createElement('script');
+    sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
+    sc.async = true;
+    sc.textContent = JSON.stringify({
+      dataSource: 'NASDAQ100', grouping: 'sector', blockSize: 'market_cap_basic', blockColor: 'change',
+      exchanges: [], locale: 'kr', symbolUrl: '', colorTheme: dark() ? 'dark' : 'light',
+      hasTopBar: true, isDataSetEnabled: true, isZoomEnabled: true, hasSymbolTooltip: true,
+      isMonoSize: false, width: '100%', height: '100%',
+    });
+    box.appendChild(sc);
+    el('heat').appendChild(box);
+  }
+
+  const fmt = (v, d = 2) => num(v) === null ? '–' : num(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const sgn = (v, s) => num(v) === null ? '–' : `${num(v) > 0 ? '+' : ''}${s}`;
+  function renderMarket(m) {
+    const rows = m.rows || [];
+    el('mkt-at').textContent = m.fetchedAt ? `${kst(m.fetchedAt)} 기준` : '';
+    el('mkt').innerHTML = `<div class="table-wrap"><table aria-label="선물 시세">
+      <thead><tr><th>종목</th><th class="num">가격</th><th class="num">변동</th><th class="num">변동%</th><th class="num at">시간</th></tr></thead>
+      <tbody>${rows.map(r => r.error
+        ? `<tr><td class="name">${esc(r.name)}</td><td class="num muted" colspan="3">못 받았어요</td><td class="num at"></td></tr>`
+        : `<tr><td class="name">${esc(r.name)}</td>
+          <td class="num mono ${sign(r.change)}">${fmt(r.price)}</td>
+          <td class="num mono ${sign(r.change)}">${sgn(r.change, fmt(r.change))}</td>
+          <td class="num mono ${sign(r.change)}">${sgn(r.pct, fmt(r.pct) + '%')}</td>
+          <td class="num mono at">${r.at ? kst(r.at) : '–'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function demoMarket() {
+    const at = h => `2026-10-07T${h}:00+09:00`;
+    return { fetchedAt: at('22:40'), rows: [
+      { name: '코스피200 야간선물', price: 1055.2, change: -23.55, pct: -2.18, at: at('22:40') },
+      { name: 'WTI 원유', price: 90.55, change: 1.11, pct: 1.24, at: at('22:30') },
+      { name: 'S&P500 E-mini', price: 7839.5, change: -34.5, pct: -0.44, at: at('22:30') },
+      { name: '나스닥100 E-mini', price: 31232.5, change: -250.75, pct: -0.80, at: at('22:30') },
+    ] };
+  }
+  async function pollMarket() {
+    clearTimeout(mktTimer);
+    if (!marketOpen() || document.hidden) return;
+    if (DEMO) { renderMarket(demoMarket()); return; }
+    try {
+      const res = await fetch(`${LIVE}api/market?t=${Date.now()}`, { cache: 'no-store' });
+      const m = await res.json();
+      if (!res.ok) throw new Error(m.error || res.status);
+      renderMarket(m);
+    } catch (e) {
+      if (!el('mkt').querySelector('table'))
+        el('mkt').innerHTML = '<div class="err">선물 시세는 봇이 도는 PC(또는 같은 와이파이의 PC IP:8765)에서 열었을 때 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
+    }
+    mktTimer = setTimeout(pollMarket, MKT_MS);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollMarket(); });
 
   // ---- 가짜 데이터 (?demo=1): 실제 봇 데이터 없이 화면을 미리 보기 위한 모의 매매. 매번 같은 결과
   const DEMO = new URLSearchParams(location.search).get('demo') === '1';
@@ -673,6 +791,9 @@
 
   load();
   setInterval(load, 60000);
+  let startTab = location.hash === '#market' ? 'market' : 'bot';
+  try { if (!location.hash && localStorage.getItem(TAB_KEY) === 'market') startTab = 'market'; } catch (e) {}
+  showTab(startTab, false);
 })();
 </script>
 </body>

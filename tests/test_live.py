@@ -66,11 +66,21 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(p["symbol"], "TECL")
 
 
+class FakeMarket:
+    def __init__(self):
+        self.calls = 0
+
+    def snapshot(self):
+        self.calls += 1
+        return {"rows": [{"id": "wti", "name": "WTI 원유", "price": 90.55}]}
+
+
 class ServerTest(unittest.TestCase):
     def setUp(self):
         self.toss = FakeToss()
         self.clock = Clock()
-        self.srv = LiveServer(self.toss, "TECL", host="127.0.0.1", port=0, clock=self.clock).start()
+        self.market = FakeMarket()
+        self.srv = LiveServer(self.toss, "TECL", host="127.0.0.1", port=0, clock=self.clock, market=self.market).start()
         self.base = f"http://127.0.0.1:{self.srv.port}"
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -119,6 +129,17 @@ class ServerTest(unittest.TestCase):
         status, _, body = self.get("/api/orderbook")
         self.assertEqual(status, 502)
         self.assertIn("403 IP", json.loads(body)["error"])
+
+    def test_market_cached_with_cors(self):
+        status, headers, body = self.get("/api/market")
+        self.get("/api/market")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
+        self.assertEqual(json.loads(body)["rows"][0]["price"], 90.55)
+        self.assertEqual(self.market.calls, 1)
+        self.clock.t = 10.0
+        self.get("/api/market")
+        self.assertEqual(self.market.calls, 2)
 
     def test_dashboard_without_config_and_unknown_path(self):
         self.assertEqual(self.get("/dashboard.json")[0], 404)
