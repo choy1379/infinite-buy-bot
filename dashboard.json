@@ -1,0 +1,34 @@
+{
+ "version": 1,
+ "symbol": "TECL",
+ "updatedAt": "2026-10-07T05:47:36.799805+00:00",
+ "mode": "실거래(LIVE)",
+ "splits": 20,
+ "targetPct": "15",
+ "bot": {
+  "lastError": null,
+  "lastErrorAt": null
+ },
+ "position": {
+  "hasPosition": true,
+  "t": null,
+  "plRate": "-0.0005"
+ },
+ "cycle": null,
+ "nextSession": {
+  "date": "2026-10-07",
+  "start": "2026-10-07T22:30:00+09:00",
+  "end": "2026-10-08T05:00:00+09:00",
+  "orderAt": "2026-10-07T22:45:00+09:00"
+ },
+ "days": [],
+ "history": [],
+ "secret": {
+  "alg": "pbkdf2-sha256/hmac-ctr",
+  "iter": 200000,
+  "salt": "IBUCxHSekkWuPX7visiGkw==",
+  "nonce": "Ye77BuOOlByeOIIqM4t2XQ==",
+  "ct": "/l0R/4z7QBSV/pe492gE/szmRy/PN8iMrsVLCVFLfF52w5ANiVDZ1PrfCkUnmy5COQlv+7gRFyKuUIGBstqBkYPcIJrxHt26e+tBr3H0FHYThfqM0m4LhHK0fYo0zzk+/Yl0a+npFHCszRYGs3fWIXdSGub2VGRNQxqcYpmTvV8k3L7DhxfsJXhUWKbrdM7ypM/fzOMxuFb7axLqFHc37ljcXMBgHxlEHkZq",
+  "mac": "c2v6HrNt8Zd/UL5XKPWSfI00QpGNqix9eaEV9tPCz/M="
+ }
+}
