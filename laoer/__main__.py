@@ -75,6 +75,7 @@ def build_bot(cfg: Config) -> Bot:
         account_seq=cfg.toss.account_seq,
     )
     bot = Bot(cfg, toss, build_notifier(cfg), State(cfg.run.state_dir / "state.json"))
+    bot.fx_rate = lambda: Market().quote("yahoo", "KRW=X")["price"]
     if cfg.dashboard:
         d = cfg.dashboard
         bot.dashboard = Dashboard(GitHubPublisher(d.github_token, d.repo, d.branch), d.password, d.heartbeat_minutes)
