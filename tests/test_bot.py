@@ -196,6 +196,7 @@ class BotFlowTest(unittest.TestCase):
         self.assertIn("체결 결과", report.title)
         self.assertIn("✅ 매수 첫매수LOC 5/5주 @ $100.00", report.lines)
         self.assertEqual(bot.state.cycle["bought"], "500.00")
+        self.assertEqual((bot.state.days["2026-10-06"]["close"], bot.state.days["2026-10-06"]["daily_pct"]), ("100", "0.00"))
 
         # 2일차 — 전반전: T=1, 별% 13.5
         self.at(2026, 10, 7, 22, 45)
@@ -218,6 +219,9 @@ class BotFlowTest(unittest.TestCase):
         self.assertIn("사이클 #1 완료", titles[-1])
         self.assertIn("실현손익 $74.00 (원금 대비 +0.74%)", self.capture.messages[-1].lines)
         self.assertIsNone(bot.state.cycle)
+        # 일간: 전일 종가 100 x 5주 = 500 → 다 팔아 574 → +74 (+14.80%)
+        d2 = bot.state.days["2026-10-07"]
+        self.assertEqual((d2["close"], d2["pnl"], d2["daily_pct"]), ("114", "74.00", "14.80"))
 
         # 3일차 — 새 사이클 첫 매수
         self.at(2026, 10, 8, 22, 45)

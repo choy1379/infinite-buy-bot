@@ -82,7 +82,7 @@ def _order_status(e: dict) -> str:
     return "filled" if fq >= Decimal(str(e.get("qty") or 0)) else "partial"
 
 
-def build_payload(bot, *, holding=None, price=None, cash=None, session=None, password: str = "", days: int = 30) -> dict:
+def build_payload(bot, *, holding=None, price=None, cash=None, session=None, password: str = "", days: int = 120) -> dict:
     """bot.state + 실시간 조회값으로 공개/비공개 데이터를 만든다."""
     from .bot import _d, kst  # 순환 import 방지
     from .strategy import t_value
@@ -109,6 +109,7 @@ def build_payload(bot, *, holding=None, price=None, cash=None, session=None, pas
                 "t": day.get("t"),
                 "starPct": day.get("star_pct"),
                 "reported": bool(day.get("reported")),
+                "dailyPct": day.get("daily_pct"),
                 "orders": [
                     {"leg": e["leg"], "side": e["side"], "tif": e["tif"], "status": _order_status(e)} for e in orders
                 ],
@@ -122,6 +123,8 @@ def build_payload(bot, *, holding=None, price=None, cash=None, session=None, pas
                 "avgBefore": day.get("avg_before"),
                 "qtyAfter": day.get("qty_after"),
                 "avgAfter": day.get("avg_after"),
+                "close": day.get("close"),
+                "pnl": day.get("pnl"),
                 "orders": [
                     {
                         "leg": e["leg"],
