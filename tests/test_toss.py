@@ -59,10 +59,22 @@ def make_handler(fake: FakeToss):
 
             if url.path == "/api/v1/accounts":
                 return self._send(200, {"result": [{"accountNo": "1", "accountSeq": 7, "accountType": "BROKERAGE"}]})
-            if self.headers.get("X-Tossinvest-Account") is None and url.path not in ("/api/v1/prices",):
+            if self.headers.get("X-Tossinvest-Account") is None and url.path not in ("/api/v1/prices", "/api/v1/orderbook"):
                 return self._send(400, {"error": {"requestId": "r", "code": "missing-account", "message": "헤더 누락"}})
             if url.path == "/api/v1/prices":
                 return self._send(200, {"result": [{"symbol": "TECL", "lastPrice": "101.25", "currency": "USD"}]})
+            if url.path == "/api/v1/orderbook":
+                return self._send(
+                    200,
+                    {
+                        "result": {
+                            "timestamp": "2026-10-07T14:00:00Z",
+                            "currency": "USD",
+                            "asks": [{"price": "101.30", "volume": "120"}, {"price": "101.35", "volume": "80"}],
+                            "bids": [{"price": "101.25", "volume": "50"}],
+                        }
+                    },
+                )
             if url.path == "/api/v1/holdings":
                 return self._send(
                     200,
@@ -142,6 +154,24 @@ class TossClientTest(unittest.TestCase):
         c.price("TECL")
         self.fake.valid_token = "rotated-elsewhere"
         self.assertEqual(c.price("TECL"), D("101.25"))
+        self.assertEqual(self.fake.tokens_issued, 2)
+
+    def test_orderbook_request(self):
+        r = self.client().orderbook("TECL")
+        self.assertEqual(r["asks"][0], {"price": "101.30", "volume": "120"})
+        call = [x for x in self.fake.calls if x[1] == "/api/v1/orderbook"][0]
+        self.assertEqual(call[4]["symbol"], ["TECL"])
+        self.assertIsNone(call[2]["X-Tossinvest-Account"])
+
+    def test_concurrent_401_reissues_token_once(self):
+        c = self.client()
+        c.price("TECL")
+        self.fake.valid_token = "rotated-elsewhere"
+        threads = [threading.Thread(target=c.orderbook, args=("TECL",)) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         self.assertEqual(self.fake.tokens_issued, 2)
 
     def test_retries_after_429(self):

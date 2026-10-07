@@ -14,8 +14,9 @@ import json
 import logging
 import os
 import re
-import zlib
+import threading
 import time
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -121,6 +122,7 @@ class TossClient:
         self.max_attempts = max_attempts
         self._sleep = sleep
         self._access_token: str | None = None
+        self._token_lock = threading.Lock()  # 실시간 호가 서버 스레드와 봇이 토큰을 같이 씀
 
     # ------------------------------------------------------------------ auth
     def _load_cached_token(self) -> str | None:
@@ -162,7 +164,12 @@ class TossClient:
         return token
 
     def _token(self, *, force: bool = False, stale: str | None = None) -> str:
-        if self._access_token and not force:
+        with self._token_lock:
+            return self._token_locked(force=force, stale=stale)
+
+    def _token_locked(self, *, force: bool, stale: str | None) -> str:
+        # force 여도 다른 스레드가 이미 새 토큰으로 바꿨으면 그걸 씀 (한 번만 재발급)
+        if self._access_token and (not force or (stale and self._access_token != stale)):
             return self._access_token
         cached = self._load_cached_token()
         if cached and cached != stale:
@@ -252,6 +259,10 @@ class TossClient:
             if r.get("symbol", "").upper() == symbol.upper():
                 return Decimal(r["lastPrice"])
         raise TossError(404, "symbol-not-found", f"{symbol} 현재가가 없습니다")
+
+    def orderbook(self, symbol: str) -> dict:
+        """호가: {timestamp, currency, asks: [{price, volume}] (낮은 가격순), bids (높은 가격순)}"""
+        return self._call("GET", "/api/v1/orderbook", params={"symbol": symbol}, retry=False)["result"]
 
     def holding(self, symbol: str) -> Holding | None:
         try:

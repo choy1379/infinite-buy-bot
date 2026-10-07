@@ -133,6 +133,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 | `report [--date YYYY-MM-DD]` | 체결 결과를 지금 확인해 알림 |
 | `status [--notify]` | 보유·T값·사이클 상태 (`--notify`면 알림으로도) |
 | `dashboard` | 모니터링 페이지 데이터를 지금 갱신 |
+| `live` | 실시간 호가 페이지만 띄움 (`run` 은 자동으로 같이 띄움) |
 | `notify-test` | 알림 테스트 |
 | `kakao-login` | 카카오 토큰 발급 |
 
@@ -207,6 +208,17 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 3. `python -m laoer dashboard` 로 한 번 올려보고 페이지 확인 → `stop.cmd` / `start.cmd` 로 봇 재시작
 
 
+
+### 실시간 호가 (봇 PC에서)
+
+GitHub 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 있어서 실시간 호가는 봇 PC가 직접 띄웁니다.
+
+- 봇(`start.cmd`)이 돌면 이 PC에서 **http://localhost:8765/** 가 열립니다. 위 모니터링 페이지와 같은 화면에 **실시간 호가**(1초마다 갱신, 매도·매수 10단계)가 더해져요.
+- 같은 와이파이의 폰에서는 **http://<봇 PC의 IP>:8765/** (PC IP는 `ipconfig` 의 IPv4 주소). 처음에 Windows 방화벽 창이 뜨면 **개인 네트워크** 허용.
+- 호가는 화면을 보고 있을 때만, 여러 기기가 봐도 초당 1번만 토스에서 가져옵니다 (시세 API 한도 초당 15회).
+- 봇 없이 페이지만 띄우려면 `python -m laoer live`. 끄려면 `config.toml` 에 `[live]` `port = 0`.
+- 공개 시세와 이미 공개된 `dashboard.json` 만 내보내고 계좌 정보는 다루지 않아요.
+
 카톡 알림은 내 카카오톡 **'나와의 채팅'** 으로 옵니다.
 
 1. [Kakao Developers](https://developers.kakao.com) → 내 애플리케이션 → 애플리케이션 추가
@@ -280,8 +292,10 @@ laoer/
   toss.py       토스증권 Open API 클라이언트
   bot.py        스케줄·주문·체결 리포트·사이클 관리
   notify.py     디스코드 웹훅, 카카오 나에게 보내기
+  dashboard.py  모니터링 페이지 데이터 (암호화 후 GitHub에 올림)
+  live.py       봇 PC의 실시간 호가 페이지 서버
   config.py     config.toml 로딩
   state.py      state/state.json 저장
-index.html      모니터링 페이지 (GitHub Pages)
+index.html      모니터링 페이지 (GitHub Pages, 봇 PC에서는 실시간 호가 포함)
 tests/          python -m unittest discover -s tests -t .
 ```

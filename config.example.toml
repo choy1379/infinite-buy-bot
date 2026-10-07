@@ -58,3 +58,10 @@ password = ""
 repo = "choy1379/infinite-buy-bot"
 branch = "tecl-data"         # 데이터만 올라가는 브랜치 (없으면 봇이 만듦)
 heartbeat_minutes = 180      # 할 일이 없어도 이 간격으로 '봇 살아있음' 갱신
+
+[live]
+# 실시간 호가 페이지: 봇이 돌 때 이 PC에서 http://localhost:8765/ 로 열림.
+# 같은 와이파이의 폰에서는 http://<이 PC의 IP>:8765/ (처음에 Windows 방화벽 허용 창이 뜨면 '개인 네트워크' 허용)
+# 0 = 끔. host = "127.0.0.1" 이면 이 PC에서만 열림
+port = 8765
+host = "0.0.0.0"
