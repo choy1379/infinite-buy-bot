@@ -114,6 +114,10 @@
   td.num, th.num { text-align: right; }
   .table-wrap { overflow-x: auto; }
 
+  .chart { padding: 0; overflow: hidden; height: 420px; }
+  .chart .tradingview-widget-container, .chart .tradingview-widget-container__widget { height: 100%; }
+  @media (max-width: 420px) { .chart { height: 360px; } }
+
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
   footer p { margin: 0; max-width: 65ch; }
@@ -128,6 +132,11 @@
   <div id="notice"></div>
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
+
+  <section aria-label="시세">
+    <h2 id="chart-title">TECL 시세</h2>
+    <div class="card chart" id="chart"></div>
+  </section>
 
   <section class="card lock" id="lock">
     <h2>🔒 금액 정보</h2>
@@ -152,6 +161,7 @@
 
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
+    <p>시세·차트는 TradingView에서 브라우저가 바로 불러와서 봇 PC가 꺼져 있어도 보입니다.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
 </main>
@@ -344,10 +354,49 @@
         ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
   }
 
+  // ---- 시세 차트: TradingView 위젯을 브라우저에서 바로 불러옴 (봇 업로드와 무관하게 실시간)
+  const TV_EXCHANGE = { TECL: 'AMEX' };   // TECL 은 NYSE Arca 상장 → TradingView 표기는 AMEX
+  const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+  let chartKey = '';
+  function isDark() {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === 'dark' : darkMq.matches;
+  }
+  function renderChart() {
+    const sym = String((data && data.symbol) || 'TECL').toUpperCase();
+    const dark = isDark();
+    const key = `${sym}|${dark}`;
+    if (key === chartKey) return;   // 1분마다 다시 그리지 않음
+    chartKey = key;
+    el('chart-title').textContent = `${sym} 시세`;
+    const css = getComputedStyle(document.documentElement);
+    const v = name => css.getPropertyValue(name).trim();
+    const tvSym = TV_EXCHANGE[sym] ? `${TV_EXCHANGE[sym]}:${sym}` : sym;
+    const box = el('chart');
+    box.style.height = '';
+    box.innerHTML = '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
+    const s = document.createElement('script');
+    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+    s.async = true;
+    s.onerror = () => { chartKey = ''; box.style.height = 'auto'; box.innerHTML = `<div class="empty" style="border:0">차트를 못 불러왔어요. 광고 차단기가 TradingView를 막고 있을 수 있어요.<br><a href="https://www.tradingview.com/symbols/${tvSym.replace(':', '-')}/" target="_blank" rel="noopener">TradingView에서 ${esc(sym)} 보기</a></div>`; };
+    s.textContent = JSON.stringify({
+      symbols: [[sym, `${tvSym}|1D`]],
+      chartOnly: false, autosize: true, width: '100%', height: '100%',
+      locale: 'kr', colorTheme: dark ? 'dark' : 'light', isTransparent: false,
+      backgroundColor: v('--surface'), gridLineColor: v('--line'), fontColor: v('--muted'),
+      chartType: 'area', lineColor: v('--accent'), topColor: v('--accent') + '55', bottomColor: v('--accent') + '00',
+      lineWidth: 2, showVolume: false, hideDateRanges: false, hideMarketStatus: false, scalePosition: 'right', scaleMode: 'Normal',
+      fontFamily: v('--font-body'), valuesTracking: '1', changeMode: 'price-and-percent',
+      dateRanges: ['1d|1', '1m|30', '3m|60', '12m|1D', '60m|1W', 'all|1M'],
+    });
+    box.firstElementChild.appendChild(s);
+  }
+  darkMq.addEventListener('change', renderChart);
+
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderChart(); renderSecret(); renderDays(); renderHistory();
   }
 
   async function load() {
@@ -363,6 +412,7 @@
       }
       render();
     } catch (e) {
+      renderChart();   // 봇 데이터가 없어도 시세는 보여줌
       el('status').innerHTML = '<span class="pill bad">불러오기 실패</span>';
       el('notice').innerHTML = `<div class="notice bad">데이터를 아직 못 불러왔어요 (${esc(e.message)}). 봇에서 <span class="mono">python -m laoer dashboard</span> 를 한 번 실행해 보세요.</div>`;
     }
