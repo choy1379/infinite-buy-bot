@@ -59,9 +59,9 @@
 
 1. Python 3.11+ 설치 (설치 화면에서 **Add python.exe to PATH** 체크)
 2. 이 폴더를 내려받기 (아래 둘 중 하나)
-   - Git: `git clone -b claude/awesome-tesla-i33q3e https://github.com/choy1379/shibuya-sky-status.git`
-   - 또는 GitHub에서 브랜치 `claude/awesome-tesla-i33q3e` 선택 → Code → **Download ZIP** → 압축 풀기
-3. `tecl-infinite-buy` 폴더에서
+   - Git: `git clone https://github.com/choy1379/infinite-buy-bot.git`
+   - 또는 https://github.com/choy1379/infinite-buy-bot → Code → **Download ZIP** → 압축 풀기
+3. `infinite-buy-bot` 폴더에서
 
 | 파일 | 하는 일 |
 |---|---|
@@ -75,7 +75,7 @@
 ## 설치 · 설정
 
 ```bash
-cd tecl-infinite-buy
+cd infinite-buy-bot
 copy config.example.toml config.toml     # Windows   (mac/linux: cp config.example.toml config.toml)
 ```
 
@@ -139,7 +139,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 봇은 미국 장 시간(한국 밤~새벽)에 주문하므로 **그 시간에 컴퓨터가 켜져 있어야** 합니다.
 
 - **Windows**: 터미널에서 `python -m laoer run` 을 켜두거나, 작업 스케줄러에
-  "로그온할 때 / 프로그램: `python`, 인수: `-m laoer run`, 시작 위치: `...\tecl-infinite-buy`" 로 등록.
+  "로그온할 때 / 프로그램: `python`, 인수: `-m laoer run`, 시작 위치: `...\infinite-buy-bot`" 로 등록.
   절전 모드에 들어가지 않게 전원 설정을 바꿔 두세요.
 - **상시 서버 (라즈베리파이·클라우드 VM)**: `nohup python3 -m laoer run &` 또는 systemd 서비스.
 
@@ -148,9 +148,9 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 
 ## 모니터링 페이지
 
-폰에서도 보는 페이지: **https://choy1379.github.io/shibuya-sky-status/tecl.html**
+폰에서도 보는 페이지: **https://choy1379.github.io/infinite-buy-bot/**
 
-- 이 저장소는 **공개**라서 두 단계로 보여줍니다.
+- 이 저장소는 **공개**라서 (그래야 무료로 GitHub Pages를 쓸 수 있음) 두 단계로 보여줍니다.
   - 누구나: T값, 평가손익(%), 사이클, 다음 주문 시각, 날짜별 주문의 체결 여부, 완료 사이클 수익률(%)
   - **비밀번호 입력 시**: 보유 수량·평단·현재가·평가금액·매수가능금액·원금, 주문 가격/수량/체결가, 실현손익($)
 - 금액 정보는 봇이 비밀번호로 **암호화해서** 올리고, 페이지가 브라우저 안에서 풉니다. 비밀번호는 어디로도 전송되지 않아요.
@@ -159,7 +159,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 
 설정:
 1. GitHub → 오른쪽 위 프로필 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
-   - Repository access: **Only select repositories → shibuya-sky-status**
+   - Repository access: **Only select repositories → infinite-buy-bot**
    - Permissions → Repository permissions → **Contents: Read and write**
 2. `config.toml` 의 `[dashboard]` 에 토큰과 비밀번호(8자 이상) 입력
 3. `python -m laoer dashboard` 로 한 번 올려보고 페이지 확인 → `stop.cmd` / `start.cmd` 로 봇 재시작
@@ -240,4 +240,6 @@ laoer/
   notify.py     디스코드 웹훅, 카카오 나에게 보내기
   config.py     config.toml 로딩
   state.py      state/state.json 저장
+index.html      모니터링 페이지 (GitHub Pages)
+tests/          python -m unittest discover -s tests -t .
 ```

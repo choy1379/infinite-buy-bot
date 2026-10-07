@@ -179,7 +179,7 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
             raise ConfigError("[dashboard] password 는 8자 이상으로 정하세요 (공개 페이지의 금액 정보를 잠그는 비밀번호).")
         dashboard = DashboardConfig(
             github_token=gh_token,
-            repo=str(db.get("repo", "choy1379/shibuya-sky-status")),
+            repo=str(db.get("repo", "choy1379/infinite-buy-bot")),
             branch=str(db.get("branch", "tecl-data")),
             password=password,
             heartbeat_minutes=int(db.get("heartbeat_minutes", 180)),

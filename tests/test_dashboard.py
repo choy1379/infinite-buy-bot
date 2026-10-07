@@ -10,7 +10,7 @@ from pathlib import Path
 from laoer.dashboard import GitHubPublisher, build_payload, decrypt, encrypt
 from tests import test_bot as tb
 
-PAGE = Path(__file__).resolve().parents[2] / "tecl.html"
+PAGE = Path(__file__).resolve().parents[1] / "index.html"
 
 
 class CryptoTest(unittest.TestCase):
@@ -20,7 +20,7 @@ class CryptoTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             decrypt("wrong", box)
 
-    @unittest.skipUnless(shutil.which("node") and PAGE.exists(), "node 또는 tecl.html 없음")
+    @unittest.skipUnless(shutil.which("node") and PAGE.exists(), "node 또는 index.html 없음")
     def test_page_javascript_decrypts_python_output(self):
         secret = {"holding": {"qty": "37", "avg": "101.2345"}, "note": "한글 " * 40}
         box = encrypt("pw-12345678", json.dumps(secret, ensure_ascii=False).encode(), iterations=2000)

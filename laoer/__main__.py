@@ -175,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             bot.dashboard.publish(bot, "manual")
             owner, repo = cfg.dashboard.repo.split("/", 1)
-            print(f"갱신 완료 → https://{owner}.github.io/{repo}/tecl.html")
+            print(f"갱신 완료 → https://{owner}.github.io/{repo}/")
         elif args.cmd == "report":
             date = args.date or latest_day(bot)
             if not date or date not in bot.state.days:

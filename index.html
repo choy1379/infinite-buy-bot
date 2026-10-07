@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>TECL 무한매수</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+  /* 레이아웃: 상태 → 핵심 지표(공개) → 잠금 해제(금액) → 날짜별 주문 → 완료 사이클 */
+  :root {
+    --bg: #eef1f6; --surface: #ffffff; --ink: #1b2236; --muted: #5d6680; --line: #d7dce7;
+    --accent: #3d4fd1; --on-accent: #ffffff;
+    --ok: #1f8a4c;  --ok-bg: #e2f4ea;
+    --low: #a35a00; --low-bg: #fcefd9;
+    --bad: #c23a3a; --bad-bg: #fbe4e4;
+    --buy: #c23a3a; --sell: #2f5fd0;   /* 한국식: 매수 빨강, 매도 파랑 */
+    --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1424; --surface: #181f33; --ink: #e8ebf4; --muted: #9aa3bd; --line: #2a3350;
+      --accent: #8c9bff; --on-accent: #0f1424;
+      --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
+      --buy: #f08080; --sell: #8cb1ff;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1424; --surface: #181f33; --ink: #e8ebf4; --muted: #9aa3bd; --line: #2a3350;
+    --accent: #8c9bff; --on-accent: #0f1424;
+    --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
+    --buy: #f08080; --sell: #8cb1ff;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.6 var(--font-body);
+    padding: 0 16px;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  main { max-width: 680px; margin: 0 auto; padding-block: 32px 48px; display: grid; gap: 20px; }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
+  h1 small { display: block; font-size: 0.95rem; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+
+  .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); font-size: 0.9rem; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.ok { color: var(--ok); background: var(--ok-bg); }
+  .pill.warn { color: var(--low); background: var(--low-bg); }
+  .pill.bad { color: var(--bad); background: var(--bad-bg); }
+  .pill.idle { color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+  .notice { padding: 12px 14px; border-radius: 10px; font-size: 0.9rem; }
+  .notice.bad { background: var(--bad-bg); color: var(--bad); }
+  .notice.warn { background: var(--low-bg); color: var(--low); }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .stat .label { color: var(--muted); font-size: 0.82rem; }
+  .stat .value { font-size: 1.45rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+  .stat .sub { color: var(--muted); font-size: 0.82rem; }
+  .bar { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+  .bar.half > span { background: var(--low); }
+  .up { color: var(--buy); } .down { color: var(--sell); }
+
+  .lock form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .lock input[type=password] {
+    flex: 1 1 200px; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit;
+  }
+  .lock label { font-size: 0.85rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  button {
+    padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent);
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 0; }
+  .kv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line); padding: 4px 0; }
+  .kv dt { color: var(--muted); font-size: 0.88rem; } .kv dd { margin: 0; text-align: right; }
+
+  .day { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .day header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .day header h3 { margin: 0; font-size: 1rem; }
+  .day header span { color: var(--muted); font-size: 0.85rem; }
+  .ord { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 16px; font-size: 0.92rem; }
+  .ord + .ord { border-top: 1px solid var(--line); }
+  .side { font-weight: 700; font-size: 0.82rem; }
+  .side.BUY { color: var(--buy); } .side.SELL { color: var(--sell); }
+  .detail { color: var(--muted); font-size: 0.85rem; }
+  .tag { font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+  .tag.filled { color: var(--ok); background: var(--ok-bg); }
+  .tag.partial, .tag.pending, .tag.planned { color: var(--low); background: var(--low-bg); }
+  .tag.unfilled { color: var(--muted); border: 1px solid var(--line); }
+  .tag.error { color: var(--bad); background: var(--bad-bg); }
+  .after { padding: 8px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.82rem; }
+  td.num, th.num { text-align: right; }
+  .table-wrap { overflow-x: auto; }
+
+  .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
+  footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
+  footer p { margin: 0; max-width: 65ch; }
+  @media (max-width: 420px) { .kv { grid-template-columns: 1fr; } .stat .value { font-size: 1.25rem; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>TECL 무한매수<small id="subtitle">라오어 무한매수법 · 토스증권 자동매매</small></h1>
+
+  <div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
+  <div id="notice"></div>
+
+  <section class="stats" id="stats" aria-label="핵심 지표"></section>
+
+  <section class="card lock" id="lock">
+    <h2>🔒 금액 정보</h2>
+    <form id="unlock">
+      <input type="password" id="pw" autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호">
+      <button type="submit">열기</button>
+      <label><input type="checkbox" id="remember"> 이 기기에서 기억</label>
+    </form>
+    <p class="muted" id="lockmsg" style="margin:8px 0 0;font-size:0.85rem">보유 수량·평단·잔고·주문가는 비밀번호로 잠겨 있어요. 비밀번호는 이 브라우저 안에서만 쓰이고 어디로도 전송되지 않습니다.</p>
+  </section>
+  <section class="card" id="secret" hidden></section>
+
+  <section>
+    <h2>날짜별 주문</h2>
+    <div id="days" style="display:grid;gap:12px"></div>
+  </section>
+
+  <section>
+    <h2>완료한 사이클</h2>
+    <div id="history"></div>
+  </section>
+
+  <footer>
+    <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
+    <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  const BRANCH = 'tecl-data';
+  const STALE_MIN = 8 * 60;
+  const PW_KEY = 'tecl-dashboard-pw';
+  const LEG = { first: '첫매수LOC', avg: '평단LOC', star: '별LOC', quarter: '쿼터LOC', target: '목표지정가' };
+  const PHASE = { first: '첫 매수', first_half: '전반전', second_half: '후반전', exhausted: '소진' };
+  const STATUS = { filled: '체결', partial: '일부 체결', unfilled: '미체결', pending: '대기', planned: '안내만', error: '주문 오류' };
+  const DAYSTAT = { placed: '', dry_run: '모의', alert: '알림 전용', blocked: '건너뜀(수동 주문 있음)', missed: '주문 시간 놓침', failed: '주문 실패', placing: '주문 중' };
+
+  let data = null, secret = null, password = null;
+  const el = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  const usd = v => num(v) === null ? '–' : (num(v) < 0 ? '-$' : '$') + Math.abs(num(v)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const qty = v => num(v) === null ? '–' : num(v).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  const pct = (v, mul = 100) => num(v) === null ? '–' : `${num(v) * mul >= 0 ? '+' : ''}${(num(v) * mul).toFixed(2)}%`;
+  const sign = v => num(v) === null ? '' : (num(v) > 0 ? 'up' : num(v) < 0 ? 'down' : '');
+  const kst = iso => {
+    if (!iso) return '–';
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(iso)).map(x => [x.type, x.value]));
+    return `${p.month}/${p.day} ${p.hour}:${p.minute}`;
+  };
+  const ago = iso => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`; };
+  const md = d => d ? d.slice(5).replace('-', '/') : '';
+
+  function source() {
+    const q = new URLSearchParams(location.search).get('src');
+    if (q) return q;
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+    const repo = location.pathname.split('/').filter(Boolean)[0];
+    if (m && repo) return `https://raw.githubusercontent.com/${m[1]}/${repo}/${BRANCH}/dashboard.json`;
+    return 'dashboard.json';
+  }
+
+  // ---- 복호화: PBKDF2-SHA256 → HMAC-SHA256 카운터 모드 (봇의 laoer/dashboard.py 와 동일)
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const cat = (a, b) => { const o = new Uint8Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+  async function decrypt(pw, box) {
+    const subtle = crypto.subtle;
+    const base = await subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    const bits = new Uint8Array(await subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(box.salt), iterations: box.iter }, base, 512));
+    const hk = raw => subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const ek = await hk(bits.slice(0, 32)), mk = await hk(bits.slice(32));
+    const nonce = b64(box.nonce), ct = b64(box.ct), want = b64(box.mac);
+    const mac = new Uint8Array(await subtle.sign('HMAC', mk, cat(nonce, ct)));
+    if (mac.length !== want.length || mac.some((b, i) => b !== want[i])) throw new Error('bad-password');
+    const out = new Uint8Array(ct.length);
+    for (let i = 0; i * 32 < ct.length; i++) {
+      const ctr = new Uint8Array(4); new DataView(ctr.buffer).setUint32(0, i);
+      const ks = new Uint8Array(await subtle.sign('HMAC', ek, cat(nonce, ctr)));
+      for (let j = 0; j < 32 && i * 32 + j < ct.length; j++) out[i * 32 + j] = ct[i * 32 + j] ^ ks[j];
+    }
+    return JSON.parse(new TextDecoder().decode(out));
+  }
+  window.__teclDecrypt = decrypt; // 테스트용
+
+  async function unlock(pw, quiet) {
+    if (!data || !data.secret) { if (!quiet) el('lockmsg').textContent = '잠긴 정보가 없어요 (봇 설정에 비밀번호가 없음).'; return; }
+    try {
+      secret = await decrypt(pw, data.secret);
+      password = pw;
+      el('lock').hidden = true;
+      render();
+    } catch (e) {
+      secret = null;
+      if (!quiet) { el('lockmsg').textContent = '비밀번호가 맞지 않아요.'; el('pw').select(); }
+    }
+  }
+
+  el('unlock').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const pw = el('pw').value;
+    if (!pw) return;
+    await unlock(pw, false);
+    if (secret && el('remember').checked) { try { localStorage.setItem(PW_KEY, pw); } catch (e) {} }
+  });
+
+  function lockAgain() {
+    secret = null; password = null;
+    try { localStorage.removeItem(PW_KEY); } catch (e) {}
+    el('pw').value = '';
+    el('lock').hidden = false;
+    render();
+  }
+
+  function renderStatus() {
+    const stale = (Date.now() - new Date(data.updatedAt)) / 60000 > STALE_MIN;
+    let pill = '<span class="pill ok">봇 동작 중</span>';
+    if (data.bot && data.bot.lastError) pill = '<span class="pill bad">오류 발생</span>';
+    else if (stale) pill = '<span class="pill warn">소식 없음</span>';
+    el('status').innerHTML = `${pill}<span>${esc(data.mode)} · 마지막 갱신 <span class="mono">${kst(data.updatedAt)}</span> (${ago(data.updatedAt)})</span>`;
+    let notice = '';
+    if (data.bot && data.bot.lastError) notice = `<div class="notice bad">봇 오류 (${kst(data.bot.lastErrorAt)}): ${esc(data.bot.lastError)}</div>`;
+    else if (stale) notice = `<div class="notice warn">${Math.floor((Date.now() - new Date(data.updatedAt)) / 3600000)}시간째 갱신이 없어요. 봇 PC가 꺼졌거나 절전 중일 수 있어요.</div>`;
+    el('notice').innerHTML = notice;
+  }
+
+  function renderStats() {
+    const p = data.position || {};
+    const t = num(p.t), splits = data.splits || 20;
+    const tPct = t === null ? 0 : Math.min(100, t / splits * 100);
+    const phase = t === null ? '보유 없음' : t >= splits - 1 ? '소진' : t < splits / 2 ? '전반전' : '후반전';
+    const ns = data.nextSession;
+    const c = data.cycle;
+    el('stats').innerHTML = `
+      <div class="stat"><div class="label">T값 (${splits}분할)</div>
+        <div class="value mono">${t === null ? '0' : t.toFixed(2)}<span class="muted" style="font-size:.9rem"> / ${splits}</span></div>
+        <div class="bar ${t !== null && t >= splits / 2 ? 'half' : ''}" role="img" aria-label="자금 사용 ${tPct.toFixed(0)}%"><span style="width:${tPct}%"></span></div>
+        <div class="sub">${phase}</div></div>
+      <div class="stat"><div class="label">평가손익</div>
+        <div class="value mono ${sign(p.plRate)}">${p.hasPosition ? pct(p.plRate) : '–'}</div>
+        <div class="sub">목표 +${esc(data.targetPct)}%에서 ¾ 익절</div></div>
+      <div class="stat"><div class="label">사이클</div>
+        <div class="value">${c ? `#${c.id}` : '–'}</div>
+        <div class="sub">${c ? `${esc(c.started)} 시작 · ${c.tradingDays}거래일째` : '다음 장에 새로 시작'}</div></div>
+      <div class="stat"><div class="label">다음 주문</div>
+        <div class="value mono" style="font-size:1.15rem">${ns ? kst(ns.orderAt) : '–'}</div>
+        <div class="sub">${ns ? `정규장 ${kst(ns.start)} ~ ${kst(ns.end).split(' ').pop()} (한국시간)` : ''}</div></div>`;
+  }
+
+  function renderSecret() {
+    const box = el('secret');
+    if (!secret) { box.hidden = true; el('lock').hidden = !data.secret ? true : false; return; }
+    box.hidden = false;
+    const h = secret.holding, c = secret.cycle || {};
+    const value = h ? num(h.qty) * num(h.lastPrice) : null;
+    const used = num(c.bought) !== null && num(c.seed) ? num(c.bought) - num(c.sold || 0) : null;
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+        <h2 style="margin:0">🔓 금액 정보</h2><button class="ghost" id="relock" type="button">다시 잠그기</button></div>
+      <dl class="kv">
+        <div><dt>보유</dt><dd class="mono">${h ? qty(h.qty) + '주' : '0주'}</dd></div>
+        <div><dt>평단</dt><dd class="mono">${h ? usd(h.avg) : '–'}</dd></div>
+        <div><dt>현재가</dt><dd class="mono">${usd(secret.price)}</dd></div>
+        <div><dt>평가금액</dt><dd class="mono">${value === null ? '–' : usd(value)}</dd></div>
+        <div><dt>매입금액</dt><dd class="mono">${h ? usd(h.purchaseAmount) : '–'}</dd></div>
+        <div><dt>매수가능</dt><dd class="mono">${usd(secret.cash)}</dd></div>
+        <div><dt>사이클 원금</dt><dd class="mono">${usd(c.seed)}</dd></div>
+        <div><dt>1회 매수금</dt><dd class="mono">${usd(c.unit)}</dd></div>
+        <div><dt>누적 매수</dt><dd class="mono">${usd(c.bought)}</dd></div>
+        <div><dt>누적 매도</dt><dd class="mono">${usd(c.sold)}</dd></div>
+      </dl>`;
+    el('relock').addEventListener('click', lockAgain);
+  }
+
+  function renderDays() {
+    const days = data.days || [];
+    if (!days.length) { el('days').innerHTML = '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다.</div>'; return; }
+    const sec = {};
+    if (secret) for (const d of secret.days || []) sec[d.date] = d;
+    el('days').innerHTML = days.map(d => {
+      const s = sec[d.date];
+      const extra = DAYSTAT[d.status] ? ` · ${DAYSTAT[d.status]}` : '';
+      const head = `${PHASE[d.phase] || ''}${d.t && d.phase !== 'first' ? ` · T ${num(d.t).toFixed(2)}` : ''}${d.starPct && d.phase !== 'first' ? ` · 별% ${pct(d.starPct, 1)}` : ''}${extra}`;
+      const rows = (d.orders || []).map((o, i) => {
+        const so = s && s.orders ? s.orders[i] : null;
+        const label = o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg);
+        let detail = '';
+        if (so) {
+          detail = `${so.qty}주 @ ${usd(so.price)}`;
+          if (num(so.filledQty) > 0) detail += ` → ${qty(so.filledQty)}주 @ ${usd(so.filledAvg)}`;
+          if (so.error) detail += ` · ${esc(so.error)}`;
+        }
+        return `<div class="ord"><span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span>
+          <span>${label}${detail ? `<br><span class="detail mono">${detail}</span>` : ''}</span>
+          <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></div>`;
+      }).join('');
+      const after = s && s.qtyAfter !== undefined && s.qtyAfter !== null
+        ? `<div class="after mono">마감 후 ${qty(s.qtyBefore)} → ${qty(s.qtyAfter)}주 · 평단 ${usd(s.avgAfter)}</div>` : '';
+      return `<article class="day"><header><h3>${md(d.date)}</h3><span>${esc(head)}</span></header>${rows || '<div class="ord muted">주문 없음</div>'}${after}</article>`;
+    }).join('');
+  }
+
+  function renderHistory() {
+    const hs = data.history || [];
+    if (!hs.length) { el('history').innerHTML = '<div class="empty">아직 끝난 사이클이 없어요.</div>'; return; }
+    const sec = {};
+    if (secret) for (const c of secret.history || []) sec[c.id] = c;
+    el('history').innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>기간</th><th class="num">거래일</th><th class="num">수익률</th>${secret ? '<th class="num">실현손익</th>' : ''}</tr></thead>
+      <tbody>${hs.map(c => `<tr><td>${c.id}</td><td class="mono">${md(c.started)}~${md(c.ended)}</td><td class="num">${c.tradingDays}</td>
+        <td class="num mono ${sign(c.returnPct)}">${c.returnPct === null ? '–' : pct(c.returnPct, 1)}</td>
+        ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function render() {
+    if (!data) return;
+    el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
+    renderStatus(); renderStats(); renderSecret(); renderDays(); renderHistory();
+  }
+
+  async function load() {
+    try {
+      const res = await fetch(`${source()}${source().includes('?') ? '&' : '?'}t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+      if (password && data.secret) await unlock(password, true);
+      else if (!password) {
+        let saved = null;
+        try { saved = localStorage.getItem(PW_KEY); } catch (e) {}
+        if (saved && data.secret) await unlock(saved, true);
+      }
+      render();
+    } catch (e) {
+      el('status').innerHTML = '<span class="pill bad">불러오기 실패</span>';
+      el('notice').innerHTML = `<div class="notice bad">데이터를 아직 못 불러왔어요 (${esc(e.message)}). 봇에서 <span class="mono">python -m laoer dashboard</span> 를 한 번 실행해 보세요.</div>`;
+    }
+  }
+
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>
