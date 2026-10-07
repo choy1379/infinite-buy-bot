@@ -6,6 +6,8 @@ GitHub Pages 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 �
   /dashboard.json  -> GitHub 의 dashboard.json 을 대신 받아 전달 (30초 캐시)
   /api/orderbook   -> 토스 GET /api/v1/orderbook (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회)
 를 제공한다. 페이지는 /api/orderbook 이 응답하면 '실시간 호가' 칸을 보여준다.
+GitHub Pages 페이지도 이 PC의 브라우저에서는 http://localhost:8765/api/orderbook 을 부를 수 있게
+/api/orderbook 에 CORS(+ Chrome 사설망 접근 preflight) 헤더를 붙인다.
 공개 시세와 이미 공개된 dashboard.json 만 내보내고, 계좌 정보는 다루지 않는다.
 """
 
@@ -106,16 +108,34 @@ class LiveServer:
             def log_message(self, fmt, *args):  # 초당 요청이 들어오니 bot.log 에 남기지 않음
                 log.debug("live %s - %s", self.address_string(), fmt % args)
 
-            def _send(self, status: int, body: bytes, ctype: str):
+            def _cors(self):
+                # 공개 시세라 출처 제한 없이 허용. 사설망 접근(공개 사이트 -> localhost) preflight 도 허용
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET")
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+
+            def _send(self, status: int, body: bytes, ctype: str, cors: bool = False):
                 self.send_response(status)
+                if cors:
+                    self._cors()
                 self.send_header("Content-Type", ctype)
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
 
-            def _json(self, status: int, obj):
-                self._send(status, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            def _json(self, status: int, obj, cors: bool = False):
+                self._send(status, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", cors)
+
+            def do_OPTIONS(self):
+                if self.path.split("?", 1)[0] != "/api/orderbook":
+                    self._json(404, {"error": "not found"})
+                    return
+                self.send_response(204)
+                self._cors()
+                self.send_header("Access-Control-Max-Age", "600")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
 
             def do_GET(self):
                 path = self.path.split("?", 1)[0]
@@ -123,9 +143,9 @@ class LiveServer:
                     self._send(200, server.page.read_bytes(), "text/html; charset=utf-8")
                 elif path == "/api/orderbook":
                     try:
-                        self._json(200, server.orderbook.get())
+                        self._json(200, server.orderbook.get(), cors=True)
                     except Exception as e:
-                        self._json(502, {"error": str(e)})
+                        self._json(502, {"error": str(e)}, cors=True)
                 elif path == "/dashboard.json":
                     if not server.dashboard_url:
                         self._json(404, {"error": "config.toml 에 [dashboard] 설정이 없습니다"})
