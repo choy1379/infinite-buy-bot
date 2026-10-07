@@ -1,7 +1,7 @@
 {
  "version": 1,
  "symbol": "TECL",
- "updatedAt": "2026-10-07T17:09:13.790253+00:00",
+ "updatedAt": "2026-10-07T20:09:16.778916+00:00",
  "mode": "실거래(LIVE)",
  "splits": 20,
  "targetPct": "15",
@@ -11,8 +11,8 @@
  },
  "position": {
   "hasPosition": true,
-  "t": "0.85",
-  "plRate": "-0.0095"
+  "t": "1.69",
+  "plRate": "-0.0038"
  },
  "cycle": {
   "id": 1,
@@ -20,10 +20,10 @@
   "tradingDays": 2
  },
  "nextSession": {
-  "date": "2026-10-07",
-  "start": "2026-10-07T22:30:00+09:00",
-  "end": "2026-10-08T05:00:00+09:00",
-  "orderAt": "2026-10-07T22:45:00+09:00"
+  "date": "2026-10-08",
+  "start": "2026-10-08T22:30:00+09:00",
+  "end": "2026-10-09T05:00:00+09:00",
+  "orderAt": "2026-10-08T22:45:00+09:00"
  },
  "days": [
   {
@@ -68,13 +68,30 @@
   }
  ],
  "history": [],
- "nextPlan": null,
+ "nextPlan": {
+  "date": "2026-10-08",
+  "phase": "first_half",
+  "t": "1.69",
+  "starPct": "12.465",
+  "orders": [
+   {
+    "leg": "star",
+    "side": "BUY",
+    "tif": "CLS"
+   },
+   {
+    "leg": "target",
+    "side": "SELL",
+    "tif": "DAY"
+   }
+  ]
+ },
  "secret": {
   "alg": "pbkdf2-sha256/hmac-ctr",
   "iter": 200000,
-  "salt": "rJt4FbbrsYsb0h8FFYDtUg==",
-  "nonce": "6yD6SsDsETC/bimvwFRPZg==",
-  "ct": "AeHeoPIpu5ivsEMneMp+390C94KXEcmKPpw1IB7zRgEB5RWL6DJ7vM9A/TuN2ef4pWnGcBSh948VD/w4ZjV8jkEcmJnFQUtRbnC2BLx5r/8G1hpkJrMHVFcsGhVMFqAdHyDFJnkdIjpFsO4N6Z5aChsVFvWafaPkN24cSAirzq/aXS5I+HhRvIxL+7vXWL//aQf+NohDW5z81XWHxscrRKrRKs+s1k/sRtsmXvfzXckdNbGMY2j6nT1AGMJDADQ/rJABbfogWaidib9V6W2G2rYO/16VOhhzp7hbb9ORzlcgAp1pWdLUKCsI+oh/heLCCMnIPyuIv1UFlsyWG2cf/VPoWoHH81N+GYd9cYLQ/BllCVVCaHBtj0JmhAQjUiYb+jjF7MWR+239H/tFcz/CoS64e6iq+AWtkXDmJpHSpB0AJLowkSqCH920muMcB+YXws0owoeKwHX5lmbKwEN4hIM2NUm6XVCuULhntCj1Ig0jCxpd35VkAmFOrm5BaO5wOjlXCIQfw+jugsilkpMptoM/Nsbh9leNdLKDfA2PdtD+JrIT9wAfzkqJKquCsaSrCJWOs5M4JK3Wt576sDZzSa7FttJyVFkECoJCujfftGXW06+xeDs2Ca9pFF8pcaJ8BQHv5EzUHhQulfXHYG7h0BPW2398IK7WCwD+4cq6OAVqg8ue97xNZ3p6uEq1S1+jT511NnfRCvKzBQApCLjbE+oAdYxWYHE2qRM+wADAsTS5zyG5Y5tav7kCvV0mJ2PYLOODewAKIRh7lMqvg/YgWZVjWNU2BVkhLJKoGSMnoOVOczx4AfKAw3nZWwxfW1SCs70h13vZqBmkKx3kDKxYFCnnE9L6JiiJMtcdXqjd9JZcPcmSJ0+Uhv0wOMMPZjDP79m/wh9G2WeKsDxnN6I9o7AVr55j5af97CzIYNN2pAhP5mTKfNwxWAFB1XCFjiOtArzmEr2AIUYcLz6azA8wJr93YSy4oKfjf+fAAcFBCEDJcO1D1ntnOYtheMrVQiy4BsdXb/yb1DTB4HeEp15DqDyU0SgP3gRQ7xP/8A2pVbH8kvgLVG2k4emUeQMi43PH3wlzzLh8PRi/fkxY8zPMLYsDEzSq5oE5UllAxNxkV0lkZ/b+FSisxVrpLKvCiS/I1WrUKXTvjJj7kxJ5p1VhrI7CGaOrJkXmZc4JBvEo7+9dp2I2AlBPWIlZIlk=",
-  "mac": "Y8JzrkBD20qOIsQg/8pjrEiWcMoAzfFkkSTMQBIWHTY="
+  "salt": "q4ovDJsqXhr0Lsn46IeBuw==",
+  "nonce": "Rdwp9oEaS84WSwjUZqqpIg==",
+  "ct": "KQX3SBOvhGKYhCTsa6TINMEAQ3b4Fh9ntSU6UgyorKoHHaUj2L8XcF0uDwG0ZFlMUGZxmEpm1M/8ssddP5ObG/KkBmTpDGyzoBkFpqGDwvZmJvlUxtF+SwXnh9ZKDX+0jAtcVNuGTTzsKoYZ9+thW1qCzuuuQb8vqEDbpkAP8y/jUpi0mqF4XA3+ZTHqlLHr4KIiAvsuTWQ1HI02U6T0ue708iUUgdOsEcFB7+Ri99liOmt5cNvqaGEy5IOjsOSdYnsXhDJ3BQHCCIT+a6kzlZzOgiMdQ1wukhQ/0gBulyk/DdVwO1TmmATDvt0yY5mDkQ4PTUErwbXqV799XAjQS2RCehiz39FHrM3MRGVG1IXyvDUB9wcNwqn15wLS/zWoowcbdEH4bwh0HdFjaHjVPyOJSninsFfyhZdVODbbZnvh/C6QhJveG37guep2UxU5tFWJCNidLB1NY8phoHI9UtUdyfI9CC7lq76WlPe85Jjvqag/oKhoKTBQX60sJFyStmwJqIS9kaac6qhm5UPlaCI81ZIli6WiOuRlVPNEpYXdiBovxTfZLmI1n9ihLkG0loWQqtHiVAg+bhE0Ij4N8MqvYSrSzI+439D1U1v0af2lBT0+NzvCM63FMlyF/Zmnn5ZlTHwsyCyQftN4+oEcsUayRccHLHYaeeJE4XW27bhZaCMiH0DoV/96nC3eVriBqz+ouIca1DGzAWXRaLNsATQSf3XuvGnf/5KUcEGOC27vdqztRBGqo4CwQdQjZFDIO19R+MefFsHEpN910nCsb2k3qMQD6aBwfAM4UslvKtjgZei85Fp+ZzoRDddhTcaOJ8nNrIUMOrGXZb8FvD3fD5hOe3ZlICud20BahkvTvQcPMqzgMnOQxhG12rf+yiG3e7iX0HD5jTk2bsVZzzCcJb154VBou9jj2RLtE12jrAYm4eAOhKJdwssSjPCvdJNO95bkQW9hJgpqEAUuFmJSZrbO85n23PVKKie3D7x/OCu410aZFSr7mus0cz5MXQ8vAQ0x48R6+o+XOnrLKyFSZhLkxY4fq79liYDX8r0fQfoeqr8XSFA1pVWYUEGnm11hRMiqGVjDBDbrwkODTYPpD0uSqiaR04VG0p18o7WQUbi1ttFetndrmUz0jJYNaIcz2ifl5GVx+ZgWbH0St7SC5sM5pBtFQALbif7CAM76TGeowxzFcDjDcqJQEBuXIouTQlA/jGPlNAo3qz6NC7vuEYz3z8HYRym/+JjAqft9PUq8wEVx7Nqu3eYURqIZThurfP8dcGjtD6YX6BLWbxTY1dIAyiLn8p4/rMQ36/AN/ZGd3t+H1ZqeYjAZcoQr6sgNoxRPsWMLfg5nzza5Qy3303v2+FjZFF5hwa49vcPDS4qEDVhH/mJe7lEB/VxKoYZYY/luY7FvpN9bGKsvTVdOtaBii4VXPRWrN2biGg8AqJYptCfsh5ODGLXZeHXQu1e0+VxxM6GdjSkDDqJ+Y+hkyc9RflQZvB7Gk6VovpJJqph3GnHJ0hNnAB8waPIc8mGT0HR8u4VqSvw1mRRfWJAuyufuZysIYl4WGJPT/wrSSc03GHehZNRPXSOGNMbGlWe95Ja8nu61NXnwGM85uD5ldGAm6XwpzLuQC/KVqvgDKLCeMTofcTH9RgXPSvCrdFHp+g0Nur/owAZhJhA0oWlqAftYnx65",
+  "mac": "7+oJLdzeCMXM4bJi2H703uI+gXClc/kgYpHNl7YqoGY="
  }
 }
