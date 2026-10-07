@@ -114,6 +114,12 @@
   td.num, th.num { text-align: right; }
   .table-wrap { overflow-x: auto; }
 
+  .fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary h2 { margin: 0; }
+  .fold > summary::after { content: "펼치기 ▾"; margin-left: auto; color: var(--muted); font-size: 0.82rem; }
+  .fold[open] > summary::after { content: "접기 ▴"; }
+  .fold > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   .chart { padding: 0; overflow: hidden; height: 420px; }
   .chart .tradingview-widget-container, .chart .tradingview-widget-container__widget { height: 100%; }
   @media (max-width: 420px) { .chart { height: 360px; } }
@@ -133,10 +139,10 @@
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
 
-  <section aria-label="시세">
-    <h2 id="chart-title">TECL 시세</h2>
+  <details class="fold" id="chart-fold" open>
+    <summary><h2 id="chart-title">TECL 시세</h2></summary>
     <div class="card chart" id="chart"></div>
-  </section>
+  </details>
 
   <section class="card lock" id="lock">
     <h2>🔒 금액 정보</h2>
@@ -362,7 +368,15 @@
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : darkMq.matches;
   }
+  const FOLD_KEY = 'tecl-dashboard-fold';
+  const fold = el('chart-fold');
+  try { if (localStorage.getItem(FOLD_KEY) === 'closed') fold.open = false; } catch (e) {}
+  fold.addEventListener('toggle', () => {
+    try { localStorage.setItem(FOLD_KEY, fold.open ? 'open' : 'closed'); } catch (e) {}
+    renderChart();
+  });
   function renderChart() {
+    if (!fold.open) return;   // 접혀 있으면 위젯을 불러오지 않음 (펼칠 때 불러옴)
     const sym = String((data && data.symbol) || 'TECL').toUpperCase();
     const dark = isDark();
     const key = `${sym}|${dark}`;
