@@ -82,7 +82,9 @@ def _order_status(e: dict) -> str:
     return "filled" if fq >= Decimal(str(e.get("qty") or 0)) else "partial"
 
 
-def build_payload(bot, *, holding=None, price=None, cash=None, session=None, password: str = "", days: int = 120) -> dict:
+def build_payload(
+    bot, *, holding=None, price=None, cash=None, session=None, plan=None, password: str = "", days: int = 120
+) -> dict:
     """bot.state + 실시간 조회값으로 공개/비공개 데이터를 만든다."""
     from .bot import _d, kst  # 순환 import 방지
     from .strategy import t_value
@@ -183,6 +185,16 @@ def build_payload(bot, *, holding=None, price=None, cash=None, session=None, pas
         },
         "days": pub_days,
         "history": history_pub,
+        # 다음 정규장에 낼 주문 (아직 안 낸 경우만). 가격·수량은 secret 쪽
+        "nextPlan": None
+        if not (plan and session)
+        else {
+            "date": session.date,
+            "phase": plan.phase,
+            "t": _s(plan.t),
+            "starPct": _s(plan.star_pct),
+            "orders": [{"leg": o.leg, "side": o.side, "tif": o.tif} for o in plan.orders],
+        },
         "secret": None,
     }
     if password:
@@ -200,6 +212,16 @@ def build_payload(bot, *, holding=None, price=None, cash=None, session=None, pas
             "cycle": None if not cycle else {k: cycle.get(k) for k in ("seed", "unit", "bought", "sold", "fees", "adopted")},
             "days": sec_days,
             "history": history_sec,
+            "nextPlan": None
+            if not (plan and session)
+            else {
+                "avg": _s(plan.avg),
+                "lastPrice": _s(plan.last_price),
+                "unit": _s(plan.unit),
+                "starPrice": _s(plan.star_price),
+                "orders": [{"leg": o.leg, "price": _s(o.price), "qty": o.qty} for o in plan.orders],
+                "notes": plan.notes,
+            },
         }
         public["secret"] = encrypt(password, json.dumps(secret, ensure_ascii=False).encode("utf-8"))
     return public
@@ -288,7 +310,7 @@ class Dashboard:
         return self.last_published is None or (now - self.last_published).total_seconds() >= self.heartbeat_minutes * 60
 
     def publish(self, bot, reason: str) -> None:
-        h = price = cash = session = None
+        h = price = cash = session = plan = None
         try:
             h = bot.toss.holding(bot.symbol)
             price = bot.toss.price(bot.symbol)
@@ -296,7 +318,12 @@ class Dashboard:
             session = bot.next_session()
         except Exception as e:  # 조회가 실패해도 상태만이라도 올린다
             log.warning("대시보드용 조회 실패: %s", e)
-        payload = build_payload(bot, holding=h, price=price, cash=cash, session=session, password=self.password)
+        if session and session.date not in bot.state.days:
+            try:  # 다음 장 주문 미리 계산 (상태는 바꾸지 않음)
+                plan, _, _ = bot.make_plan(session.date, mutate=False)
+            except Exception as e:
+                log.warning("대시보드용 다음 주문 계산 실패: %s", e)
+        payload = build_payload(bot, holding=h, price=price, cash=cash, session=session, plan=plan, password=self.password)
         self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}")
         self.last_published = bot.clock()
         log.info("대시보드 갱신 (%s)", reason)

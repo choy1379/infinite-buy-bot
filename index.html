@@ -134,6 +134,10 @@
   .book .vol span { position: relative; }
   .book tr.mid td { border-top: 1px solid var(--line); padding: 0; height: 1px; }
 
+  .next .sub { color: var(--muted); font-size: 0.85rem; margin: -4px 0 8px; }
+  .next .kv { margin-bottom: 4px; }
+  .next .est { color: var(--low); font-size: 0.78rem; margin-left: 4px; }
+  .next .notes { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 0.82rem; }
   .cal { padding: 12px; }
   .cal-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .cal-head .nav { padding: 2px 10px; font-size: 1.1rem; line-height: 1.4; }
@@ -186,6 +190,8 @@
     <p class="muted" id="lockmsg" style="margin:8px 0 0;font-size:0.85rem">보유 수량·평단·잔고·주문가는 비밀번호로 잠겨 있어요. 비밀번호는 이 브라우저 안에서만 쓰이고 어디로도 전송되지 않습니다.</p>
   </section>
   <section class="card" id="secret" hidden></section>
+
+  <section id="next" hidden></section>
 
   <section>
     <h2>날짜별 주문</h2>
@@ -350,6 +356,39 @@
         <div><dt>누적 매도</dt><dd class="mono">${usd(c.sold)}</dd></div>
       </dl>`;
     el('relock').addEventListener('click', lockAgain);
+  }
+
+  // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
+  function renderNext() {
+    const n = data.nextPlan, box = el('next');
+    if (!n) { box.hidden = true; return; }
+    box.hidden = false;
+    const sp = secret && secret.nextPlan;
+    const ns = data.nextSession;
+    const when = ns && ns.date === n.date ? `${kst(ns.orderAt)} 주문 예정` : '';
+    const head = `${PHASE[n.phase] || ''}${n.t && n.phase !== 'first' ? ` · T ${num(n.t).toFixed(2)}` : ''}${n.starPct && n.phase !== 'first' ? ` · 별% ${pct(n.starPct, 1)}` : ''}`;
+    const rows = (n.orders || []).map((o, i) => {
+      const so = sp && sp.orders ? sp.orders[i] : null;
+      const label = o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg);
+      const detail = so ? `${so.qty}주 @ ${usd(so.price)}${o.leg === 'first' ? '<span class="est">예상</span>' : ''}` : '';
+      return `<div class="ord"><span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span>
+        <span>${label}</span><span class="mono">${detail || '<span class="muted">🔒</span>'}</span></div>`;
+    }).join('');
+    const kv = sp ? `<dl class="kv">
+        <div><dt>평단</dt><dd class="mono">${num(sp.avg) ? usd(sp.avg) : '–'}</dd></div>
+        <div><dt>별지점</dt><dd class="mono">${usd(sp.starPrice)}</dd></div>
+        <div><dt>기준 현재가</dt><dd class="mono">${usd(sp.lastPrice)}</dd></div>
+        <div><dt>1회 매수금</dt><dd class="mono">${usd(sp.unit)}</dd></div>
+      </dl>` : '';
+    const notes = sp && sp.notes && sp.notes.length ? `<ul class="notes">${sp.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
+    box.innerHTML = `<h2>다음 주문 계획 · ${md(n.date)}</h2>
+      <div class="card next">
+        <p class="sub">${esc(head)}${when ? ` · ${when}` : ''}${sp ? '' : ' · 가격·수량은 비밀번호로 열어야 보여요'}</p>
+        ${kv}
+        <div class="day">${rows || '<div class="ord muted">낼 주문 없음</div>'}</div>
+        ${n.orders.some(o => o.leg === 'first') && sp ? '<p class="sub" style="margin:8px 0 0">첫 매수 한도가는 주문 직전 현재가로 다시 정해져요.</p>' : ''}
+        ${notes}
+      </div>`;
   }
 
   // ---- 날짜별 주문: 달력(월~금) + 고른 날의 주문 상세
@@ -528,6 +567,7 @@
       if (t.getUTCDay() % 6) dates.push(t.toISOString().slice(0, 10));
     let close = 92, qty = 0, avg = 0, bought = 0, sold = 0, cycleId = 1, cycleStart = null, cycleDays = 0;
     const pub = [], sec = [], hist = [], hsec = [];
+    let nextPub = null, nextSec = null;
     dates.forEach((date, i) => {
       const lastDay = i === dates.length - 1;
       const p0 = close;
@@ -538,17 +578,20 @@
       if (!qty) legs.push({ leg: 'first', side: 'BUY', tif: 'CLS', price: r2(p0 * 1.12), qty: Math.floor(UNIT / p0) });
       else {
         const star = TARGET - 1.5 * t, starPx = r2(avg * (1 + star / 100));
-        legs.push({ leg: 'avg', side: 'BUY', tif: 'CLS', price: r2(avg), qty: Math.max(1, Math.floor(UNIT / 2 / avg)) });
-        legs.push({ leg: 'star', side: 'BUY', tif: 'CLS', price: r2(starPx - 0.01), qty: Math.max(1, Math.floor(UNIT / 2 / starPx)) });
+        if (t < SPLITS / 2) {   // 전반전: 절반은 평단 LOC, 절반은 별 LOC
+          legs.push({ leg: 'avg', side: 'BUY', tif: 'CLS', price: r2(avg), qty: Math.max(1, Math.floor(UNIT / 2 / avg)) });
+          legs.push({ leg: 'star', side: 'BUY', tif: 'CLS', price: r2(starPx - 0.01), qty: Math.max(1, Math.floor(UNIT / 2 / starPx)) });
+        } else legs.push({ leg: 'star', side: 'BUY', tif: 'CLS', price: r2(starPx - 0.01), qty: Math.max(1, Math.floor(UNIT / starPx)) });   // 후반전: 전부 별 LOC
         const q4 = Math.floor(qty / 4);
         if (q4) legs.push({ leg: 'quarter', side: 'SELL', tif: 'CLS', price: starPx, qty: q4 });
         legs.push({ leg: 'target', side: 'SELL', tif: 'DAY', price: r2(avg * 1.15), qty: qty - q4 });
       }
       const phase = !qty ? 'first' : t < SPLITS / 2 ? 'first_half' : 'second_half';
       const dayT = qty ? t.toFixed(2) : null, starPct = qty ? (TARGET - 1.5 * t).toFixed(2) : null;
-      if (lastDay) {   // 오늘: 주문만 넣고 아직 마감 전
-        pub.push({ date, status: 'placed', phase, t: dayT, starPct, reported: false, dailyPct: null, orders: legs.map(o => ({ leg: o.leg, side: o.side, tif: o.tif, status: 'pending' })) });
-        sec.push({ date, price: String(p0), qtyBefore: String(qty), orders: legs.map(o => ({ leg: o.leg, price: String(o.price), qty: o.qty, filledQty: '0', filledAvg: null })) });
+      if (lastDay) {   // 다음 정규장: 아직 주문 전 → 다음 주문 계획
+        nextPub = { date, phase, t: dayT, starPct, orders: legs.map(o => ({ leg: o.leg, side: o.side, tif: o.tif })) };
+        nextSec = { avg: qty ? avg.toFixed(4) : '0', lastPrice: String(p0), unit: String(UNIT), starPrice: qty ? String(r2(avg * (1 + (TARGET - 1.5 * t) / 100))) : null,
+          orders: legs.map(o => ({ leg: o.leg, price: String(o.price), qty: o.qty })), notes: [] };
         return;
       }
       close = r2(p0 * (1 + 0.035 * gauss() + 0.003));   // TECL 은 3배 레버리지라 하루 ±3~4% 가 흔함
@@ -585,13 +628,14 @@
         version: 1, symbol: 'TECL', updatedAt: now.toISOString(), mode: '가짜 데이터(DEMO)', splits: SPLITS, targetPct: String(TARGET), bot: {},
         position: { hasPosition: qty > 0, t: tNow === null ? null : tNow.toFixed(4), plRate: qty ? String(close / avg - 1) : null },
         cycle: { id: cycleId, started: cycleStart, tradingDays: cycleDays },
-        nextSession: null, days: pub.reverse(), history: hist, secret: null,
+        nextSession: { date: dates[dates.length - 1], orderAt: `${dates[dates.length - 1]}T13:45:00Z`, start: `${dates[dates.length - 1]}T13:30:00Z`, end: `${dates[dates.length - 1]}T20:00:00Z` },
+        nextPlan: nextPub, days: pub.reverse(), history: hist, secret: null,
       },
       secret: {
         holding: qty ? { qty: String(qty), avg: avg.toFixed(4), lastPrice: String(close), purchaseAmount: (qty * avg).toFixed(2) } : null,
         price: String(close), cash: (SEED - bought + sold).toFixed(2),
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
-        days: sec.reverse(), history: hsec,
+        days: sec.reverse(), history: hsec, nextPlan: nextSec,
       },
     };
   }
@@ -599,7 +643,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderNext(); renderDays(); renderHistory();
   }
 
   async function load() {
