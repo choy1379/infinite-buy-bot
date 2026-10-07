@@ -28,8 +28,8 @@ SYMBOLS = [
     ("es", "S&P500 E-mini", "yahoo", "ES=F"),
     ("nq", "나스닥100 E-mini", "yahoo", "NQ=F"),
 ]
+# m.stock.naver.com 은 robots.txt 가 전체 금지라 쓰지 않음. polling.finance.naver.com 은 규칙 없음
 NAVER_URLS = [
-    "https://m.stock.naver.com/api/index/{code}/basic",
     "https://polling.finance.naver.com/api/realtime/domestic/index/{code}",
 ]
 # 코스피200 야간선물: 네이버엔 없어서 prober.kr 1분봉의 마지막 종가를 현재가로 씀 (비공식·사이트 종료 예정 → 실패하면 주간 종가로 대체)
