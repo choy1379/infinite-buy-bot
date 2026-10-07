@@ -216,6 +216,9 @@ GitHub 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 있어�
 - 봇(`start.cmd`)이 돌면 이 PC에서 **http://localhost:8765/** 가 열립니다. 위 모니터링 페이지와 같은 화면에 **실시간 호가**(1초마다 갱신, 매도·매수 10단계)가 더해져요.
 - 같은 와이파이의 폰에서는 **http://<봇 PC의 IP>:8765/** (PC IP는 `ipconfig` 의 IPv4 주소). 처음에 Windows 방화벽 창이 뜨면 **개인 네트워크** 허용.
 - 호가는 화면을 보고 있을 때만, 여러 기기가 봐도 초당 1번만 토스에서 가져옵니다 (시세 API 한도 초당 15회).
+- **봇 PC에서는 GitHub 페이지(https://choy1379.github.io/infinite-buy-bot/)에도 호가가 떠요.** 페이지가 이 PC의 `http://localhost:8765` 에 물어보기 때문이에요. 처음에 브라우저가 "이 기기의 다른 앱 및 서비스에 액세스" 같은 권한을 물으면 **허용**.
+  다른 기기(폰)에서는 GitHub 페이지가 집 PC에 닿을 수 없어서(https 페이지는 공유기 안의 http 주소를 못 부름) 위의 PC IP 주소로 여세요.
+  https 터널 주소가 있다면 `https://choy1379.github.io/infinite-buy-bot/?live=https://터널주소` 로 한 번 열면 그 브라우저에 기억돼요 (`?live=off` 로 해제).
 - 봇 없이 페이지만 띄우려면 `python -m laoer live`. 끄려면 `config.toml` 에 `[live]` `port = 0`.
 - 공개 시세와 이미 공개된 `dashboard.json` 만 내보내고 계좌 정보는 다루지 않아요.
 

@@ -104,6 +104,16 @@ class ServerTest(unittest.TestCase):
         self.get("/api/orderbook")
         self.assertEqual(self.toss.calls, 2)
 
+    def test_orderbook_allows_github_pages_page(self):
+        _, headers, _ = self.get("/api/orderbook")
+        self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
+        req = urllib.request.Request(self.base + "/api/orderbook", method="OPTIONS")
+        with self.opener.open(req, timeout=5) as r:
+            self.assertEqual(r.status, 204)
+            self.assertEqual(r.headers["Access-Control-Allow-Private-Network"], "true")
+        _, page_headers, _ = self.get("/")
+        self.assertIsNone(page_headers["Access-Control-Allow-Origin"])
+
     def test_orderbook_error_is_502(self):
         self.toss.fail = RuntimeError("403 IP")
         status, _, body = self.get("/api/orderbook")

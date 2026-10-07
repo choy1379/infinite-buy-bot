@@ -187,7 +187,7 @@
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
     <p>시세·차트는 TradingView에서 브라우저가 바로 불러와서 봇 PC가 꺼져 있어도 보입니다.</p>
-    <p>실시간 호가는 봇 PC에서 띄운 페이지(<span class="mono">http://localhost:8765</span>, 같은 와이파이의 폰은 PC IP로 접속)에서만 보여요.</p>
+    <p>실시간 호가는 봇이 도는 PC에서만 보여요 (이 페이지 또는 <span class="mono">http://localhost:8765</span>). 같은 와이파이의 폰은 PC IP:8765로 접속하세요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
 </main>
@@ -431,9 +431,20 @@
   }
   darkMq.addEventListener('change', renderChart);
 
-  // ---- 실시간 호가: 봇 PC가 띄운 페이지(python -m laoer run / live)에서만 보임.
-  //      GitHub Pages 에서는 호가 API가 없으니 시도하지 않음.
-  const LOCAL = !/\.github\.io$/i.test(location.hostname);
+  // ---- 실시간 호가: 봇 PC가 띄운 서버(python -m laoer run / live)의 /api/orderbook.
+  //      봇 PC가 띄운 페이지면 같은 서버, GitHub Pages 면 이 기기의 http://localhost:8765 (봇 PC에서만 응답).
+  //      다른 주소(예: https 터널)는 ?live=https://... 로 한 번 열면 이 브라우저에 기억 (?live=off 로 지움).
+  const LIVE_KEY = 'tecl-dashboard-live';
+  const BOOK_URL = (() => {
+    if (!/\.github\.io$/i.test(location.hostname)) return 'api/orderbook';
+    let base = new URLSearchParams(location.search).get('live');
+    try {
+      if (base === 'off') { localStorage.removeItem(LIVE_KEY); base = null; }
+      else if (base) localStorage.setItem(LIVE_KEY, base);
+      else base = localStorage.getItem(LIVE_KEY);
+    } catch (e) {}
+    return `${(base || 'http://localhost:8765').replace(/\/+$/, '')}/api/orderbook`;
+  })();
   const BOOK_MS = 1000;
   const bookFold = foldable('book-fold', 'tecl-dashboard-book-fold', () => { if (bookFold.open) pollBook(); });
   let bookTimer = null, bookOk = false;
@@ -457,10 +468,9 @@
   }
   async function pollBook() {
     clearTimeout(bookTimer);
-    if (!LOCAL) return;
     if (bookOk && (!bookFold.open || document.hidden)) return;   // 접혀 있거나 안 보이면 쉬기
     try {
-      const res = await fetch(`api/orderbook?t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetch(`${BOOK_URL}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.status === 404) return;   // 봇이 띄운 페이지가 아님 → 호가 칸 숨긴 채 끝
       const b = await res.json();
       bookOk = true; bookFold.hidden = false;
