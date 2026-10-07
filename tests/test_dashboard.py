@@ -79,6 +79,15 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(sec["orders"][0], {"leg": "avg", "price": "101.23", "qty": plan.orders[0].qty})
         self.assertEqual(bot.state.days, {})  # 미리 계산만, 상태는 그대로
 
+    def test_close_context_only_in_secret(self):
+        bot = self.make_bot()
+        bot.state.days["2026-10-06"] = {"date": "2026-10-06", "status": "placed", "orders": [], "close": "251.50",
+                                        "prev_close": "248.26", "fx": "1383.20", "pnl": "2.27", "daily_pct": "0.45"}
+        payload = build_payload(bot, password="pw-12345678")
+        self.assertNotIn("248.26", json.dumps({k: v for k, v in payload.items() if k != "secret"}))
+        day = json.loads(decrypt("pw-12345678", payload["secret"]))["days"][0]
+        self.assertEqual((day["prevClose"], day["fx"]), ("248.26", "1383.20"))
+
     def test_no_password_means_no_secret(self):
         bot = self.make_bot()
         self.assertIsNone(build_payload(bot)["secret"])

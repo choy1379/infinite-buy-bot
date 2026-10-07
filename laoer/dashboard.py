@@ -126,6 +126,8 @@ def build_payload(
                 "qtyAfter": day.get("qty_after"),
                 "avgAfter": day.get("avg_after"),
                 "close": day.get("close"),
+                "prevClose": day.get("prev_close"),
+                "fx": day.get("fx"),
                 "pnl": day.get("pnl"),
                 "orders": [
                     {

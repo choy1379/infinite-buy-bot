@@ -98,6 +98,7 @@ class Bot:
         self._cal_fetched: datetime | None = None
         self._error_sent: dict[str, datetime] = {}
         self.dashboard = None  # laoer.dashboard.Dashboard (선택)
+        self.fx_rate = None  # () -> 원/달러 (선택). 일간 손익을 원화로도 보여주는 용도, 못 받아도 무방
         self.last_error: str | None = None
         self.last_error_at: str | None = None
 
@@ -402,8 +403,22 @@ class Bot:
         pnl = qty * close - v0 - bought + sold - fees
         base = v0 + bought
         day["close"] = str(close)
+        day["prev_close"] = str(base_price)
+        fx = self._fx()
+        if fx is not None:
+            day["fx"] = str(fx)
         day["pnl"] = str(pnl.quantize(CENT))
         day["daily_pct"] = str((pnl / base * 100).quantize(CENT)) if base > 0 else None
+
+    def _fx(self) -> Decimal | None:
+        if not self.fx_rate:
+            return None
+        try:
+            rate = self.fx_rate()
+            return Decimal(str(rate)).quantize(CENT) if rate else None
+        except Exception as e:  # 환율은 참고용이라 실패해도 기록은 계속
+            log.warning("환율 조회 실패: %s", e)
+            return None
 
     def _report_alert(self, date: str, day: dict, cycle: dict | None) -> str:
         """알림 전용: 직접 넣은 주문의 체결 내역은 모르므로 장 시작 전/후 잔고를 비교한다."""

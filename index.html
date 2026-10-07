@@ -157,6 +157,8 @@
   .mk.BUY { color: var(--buy); background: var(--bad-bg); } .mk.SELL { color: var(--sell); background: color-mix(in srgb, var(--sell) 16%, transparent); }
   .mk.note { color: var(--muted); border: 1px solid var(--line); }
   .cal-foot { margin: 8px 0 0; color: var(--muted); font-size: 0.78rem; }
+  .why { padding: 8px 16px 4px; border-top: 1px solid var(--line); }
+  .whynote { margin: 0; padding: 0 16px 10px; color: var(--muted); font-size: 0.78rem; }
   .day header h3 .mono { font-size: 0.88rem; margin-left: 6px; }
   @media (max-width: 420px) { .cal-cell { min-height: 56px; padding: 3px 4px; } .cal-cell .pct { font-size: 0.74rem; } .mk { font-size: 0.6rem; padding: 0 2px; } }
 
@@ -432,6 +434,30 @@
   const ym = d => d.slice(0, 7);
   const shiftMonth = (m, k) => { const [y, mo] = m.split('-').map(Number); const t = new Date(Date.UTC(y, mo - 1 + k, 1)); return t.toISOString().slice(0, 7); };
 
+  // 일간 수익률이 어디서 나왔는지: 보유분 가격 변동 / 새로 산 몫 / 평단 대비 / 원화 (잠금 해제 시)
+  function dayWhy(s) {
+    if (!s || num(s.pnl) === null || num(s.close) === null || num(s.prevClose) === null) return '';
+    const sg = v => `<span class="${sign(v)}">${v >= 0 ? '+' : '-'}${usd(Math.abs(v))}</span>`;
+    const close = num(s.close), prev = num(s.prevClose), pnl = num(s.pnl), q0 = num(s.qtyBefore) || 0, q1 = num(s.qtyAfter) || 0;
+    const held = q0 * (close - prev), rest = pnl - held;
+    const chg = prev ? (close / prev - 1) * 100 : null;
+    const rows = [
+      `<div><dt>종가 변동</dt><dd class="mono">${usd(prev)} → ${usd(close)} <span class="${sign(chg)}">${chg === null ? '' : pct(chg, 1)}</span></dd></div>`,
+      q0 ? `<div><dt>보유 ${qty(q0)}주 가격 변동</dt><dd class="mono">${sg(held)}</dd></div>` : '',
+      `<div><dt>매수·매도·수수료 몫</dt><dd class="mono">${sg(rest)}</dd></div>`,
+    ];
+    if (q1 && num(s.avgAfter)) {
+      const avg = num(s.avgAfter), ev = q1 * (close - avg);
+      rows.push(`<div><dt>평단 ${usd(avg)} 대비 (${qty(q1)}주)</dt><dd class="mono">${sg(ev)} <span class="${sign(ev)}">${pct((close / avg - 1) * 100, 1)}</span></dd></div>`);
+    }
+    if (num(s.fx)) {
+      const fx = num(s.fx);
+      rows.push(`<div><dt>환율</dt><dd class="mono">${fx.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</dd></div>`);
+      rows.push(`<div><dt>일간 손익(원화 어림)</dt><dd class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : '-'}${Math.round(Math.abs(pnl * fx)).toLocaleString('ko-KR')}원</dd></div>`);
+    }
+    return `<dl class="kv why">${rows.join('')}</dl><p class="whynote">일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금). 환율은 반영하지 않은 달러 기준이에요.</p>`;
+  }
+
   function dayCard(d, s) {
     const extra = DAYSTAT[d.status] ? ` · ${DAYSTAT[d.status]}` : '';
     const head = `${PHASE[d.phase] || ''}${d.t && d.phase !== 'first' ? ` · T ${num(d.t).toFixed(2)}` : ''}${d.starPct && d.phase !== 'first' ? ` · 별% ${pct(d.starPct, 1)}` : ''}${extra}`;
@@ -449,9 +475,10 @@
         <span class="tag ${o.status}">${STATUS[o.status] || o.status}</span></div>`;
     }).join('');
     const daily = num(d.dailyPct) === null ? '' : `<span class="mono ${sign(d.dailyPct)}">일간 ${pct(d.dailyPct, 1)}${s && num(s.pnl) !== null ? ` (${num(s.pnl) >= 0 ? '+' : ''}${usd(s.pnl)})` : ''}</span>`;
+    const why = dayWhy(s);
     const after = s && s.qtyAfter !== undefined && s.qtyAfter !== null
       ? `<div class="after mono">마감 후 ${qty(s.qtyBefore)} → ${qty(s.qtyAfter)}주 · 평단 ${usd(s.avgAfter)}${s.close ? ` · 종가 ${usd(s.close)}` : ''}</div>` : '';
-    return `<article class="day"><header><h3>${md(d.date)} ${daily}</h3><span>${esc(head)}</span></header>${rows || '<div class="ord muted">주문 없음</div>'}${after}</article>`;
+    return `<article class="day"><header><h3>${md(d.date)} ${daily}</h3><span>${esc(head)}</span></header>${rows || '<div class="ord muted">주문 없음</div>'}${after}${why}</article>`;
   }
 
   function renderDays() {
@@ -730,7 +757,7 @@
       const v0 = qty0 * p0, pnl = qty * close - v0 - buyAmt + sellAmt, base = v0 + buyAmt;
       pub.push({ date, status: 'placed', phase, t: dayT, starPct, reported: true, dailyPct: base ? (pnl / base * 100).toFixed(2) : null,
         orders: legs.map((o, k) => ({ leg: o.leg, side: o.side, tif: o.tif, status: fills[k].q ? 'filled' : 'unfilled' })) });
-      sec.push({ date, price: String(p0), qtyBefore: String(qty0), qtyAfter: String(qty), avgAfter: qty ? avg.toFixed(4) : '0', close: String(close), pnl: pnl.toFixed(2),
+      sec.push({ date, price: String(p0), qtyBefore: String(qty0), qtyAfter: String(qty), avgAfter: qty ? avg.toFixed(4) : '0', close: String(close), prevClose: String(p0), fx: String(1380 + Math.round(rnd() * 20)), pnl: pnl.toFixed(2),
         orders: legs.map((o, k) => ({ leg: o.leg, price: String(o.price), qty: o.qty, filledQty: String(fills[k].q), filledAvg: fills[k].px === null ? null : String(fills[k].px) })) });
       if (qty0 && !qty) {   // 다 팔림 → 사이클 완료
         const profit = sold - bought;

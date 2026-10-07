@@ -222,6 +222,8 @@ class BotFlowTest(unittest.TestCase):
         # 일간: 전일 종가 100 x 5주 = 500 → 다 팔아 574 → +74 (+14.80%)
         d2 = bot.state.days["2026-10-07"]
         self.assertEqual((d2["close"], d2["pnl"], d2["daily_pct"]), ("114", "74.00", "14.80"))
+        self.assertEqual(d2["prev_close"], "100")  # 일간 수익률 계산에 쓴 전일 종가
+        self.assertNotIn("fx", d2)  # 환율 조회를 안 붙였으면 기록 안 함
 
         # 3일차 — 새 사이클 첫 매수
         self.at(2026, 10, 8, 22, 45)
@@ -290,6 +292,13 @@ class BotFlowTest(unittest.TestCase):
         self.at(2026, 10, 7, 7, 31)
         bot.tick()
         self.assertIn("체결 결과", self.capture.titles()[-1])
+
+    def test_fx_rate_is_recorded_and_failure_is_harmless(self):
+        bot = self.make_bot()
+        bot.fx_rate = lambda: 1383.2
+        self.assertEqual(bot._fx(), D("1383.20"))
+        bot.fx_rate = lambda: (_ for _ in ()).throw(OSError("blocked"))
+        self.assertIsNone(bot._fx())
 
     def test_preview_does_not_touch_state(self):
         bot = self.make_bot()
