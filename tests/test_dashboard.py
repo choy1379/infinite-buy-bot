@@ -65,6 +65,20 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(secret["cash"], "6250.11")
         self.assertEqual(secret["days"][0]["orders"][0]["price"], "101.23")
 
+    def test_next_plan_prices_only_in_secret(self):
+        self.broker.qty, self.broker.avg = D(37), D("101.2345")
+        bot = self.make_bot()
+        s = bot.next_session()
+        plan, _, _ = bot.make_plan(s.date, mutate=False)
+        payload = build_payload(bot, holding=self.broker.holding("TECL"), session=s, plan=plan, password="pw-12345678")
+        nxt = payload["nextPlan"]
+        self.assertEqual((nxt["date"], nxt["phase"]), ("2026-10-06", "first_half"))
+        self.assertEqual([o["leg"] for o in nxt["orders"]], ["avg", "star", "quarter", "target"])
+        self.assertNotIn("101.23", json.dumps(nxt))
+        sec = json.loads(decrypt("pw-12345678", payload["secret"]))["nextPlan"]
+        self.assertEqual(sec["orders"][0], {"leg": "avg", "price": "101.23", "qty": plan.orders[0].qty})
+        self.assertEqual(bot.state.days, {})  # 미리 계산만, 상태는 그대로
+
     def test_no_password_means_no_secret(self):
         bot = self.make_bot()
         self.assertIsNone(build_payload(bot)["secret"])
