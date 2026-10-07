@@ -1,7 +1,7 @@
 {
  "version": 1,
  "symbol": "TECL",
- "updatedAt": "2026-10-07T05:47:36.799805+00:00",
+ "updatedAt": "2026-10-07T12:59:06.890662+00:00",
  "mode": "실거래(LIVE)",
  "splits": 20,
  "targetPct": "15",
@@ -11,24 +11,46 @@
  },
  "position": {
   "hasPosition": true,
-  "t": null,
-  "plRate": "-0.0005"
+  "t": "0.85",
+  "plRate": "-0.02"
  },
- "cycle": null,
+ "cycle": {
+  "id": 1,
+  "started": "2026-10-06",
+  "tradingDays": 1
+ },
  "nextSession": {
   "date": "2026-10-07",
   "start": "2026-10-07T22:30:00+09:00",
   "end": "2026-10-08T05:00:00+09:00",
   "orderAt": "2026-10-07T22:45:00+09:00"
  },
- "days": [],
+ "days": [
+  {
+   "date": "2026-10-06",
+   "status": "placed",
+   "phase": "first",
+   "t": "0",
+   "starPct": null,
+   "reported": true,
+   "dailyPct": null,
+   "orders": [
+    {
+     "leg": "first",
+     "side": "BUY",
+     "tif": "CLS",
+     "status": "filled"
+    }
+   ]
+  }
+ ],
  "history": [],
  "secret": {
   "alg": "pbkdf2-sha256/hmac-ctr",
   "iter": 200000,
-  "salt": "IBUCxHSekkWuPX7visiGkw==",
-  "nonce": "Ye77BuOOlByeOIIqM4t2XQ==",
-  "ct": "/l0R/4z7QBSV/pe492gE/szmRy/PN8iMrsVLCVFLfF52w5ANiVDZ1PrfCkUnmy5COQlv+7gRFyKuUIGBstqBkYPcIJrxHt26e+tBr3H0FHYThfqM0m4LhHK0fYo0zzk+/Yl0a+npFHCszRYGs3fWIXdSGub2VGRNQxqcYpmTvV8k3L7DhxfsJXhUWKbrdM7ypM/fzOMxuFb7axLqFHc37ljcXMBgHxlEHkZq",
-  "mac": "c2v6HrNt8Zd/UL5XKPWSfI00QpGNqix9eaEV9tPCz/M="
+  "salt": "lFkZ2jhgVSpsf341guviDw==",
+  "nonce": "ktwe2BkbsrIb31wipnXPBA==",
+  "ct": "yX1XxNoP52Wc6DHmQJ2EZQmOM/qRvBJZ9FDnwEDDGAus8Q9fjH5O9irOiqSZatpj/DIN1NnDa8qh4MBxbUDVAzSN8beyMXhNV+gvmi67OYjV7R761pStN0ZMhIy75OFKW4Ovd8hfZEh3RktSsIHjjEbHjXlIiKec+hazVWW3Elk2LEOlA7jhtyCJoFHcHOuvFG6NRz/sP8Empxeish3B2grNH1hDqq8zt0qpMAiGBFpGkakXgEU9V9xhhD/BeqIsTFvT5+8Di1bK+yxF1+9xvFQ1iVYRKVci3RfFN6c7mqT2nZ8dgncBek+oc8WuxOrw0TPjpaNVsMIQJ3sBaJZdn9yXOIukNu0Sok1EWCEch63H6A4ukWODBVumhoLF0hkMfON+AKlf/WjeUbmU7wcGosAUs3Uq8D2R0paEcuFhnkQ9oUq2NlrGkMBF96xPFbQa6DB0tJdNg5VrTjamJVkK2vVwueTRU5Xb7uBAqCIc1fuh5ca0UNwYdfw6ETxhJeX1XI/aQ49jJEWBVdaJN3Y3vpDOBhAJS+ldYOdfgmvSCUmZdI3eupiawuwUlyjCVlxLqEP0g2SDfgxCnUK3t8cR6kdXTU2OY8R2ZR4xusOCaMF0NHsoDTAKIZ5dG09GEhuEd8EqCS8TZhqmY+8SpvXZEwEKhXRJEbut4ccOXEo/Lt1mwkW3pOoWYpRGlQ==",
+  "mac": "uws11M0FNyT8z0mqR7e5uEYCpEVcsccH4ETq5XJA58c="
  }
 }
