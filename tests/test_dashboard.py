@@ -95,6 +95,19 @@ class PayloadTest(unittest.TestCase):
         self.assertNotIn("trycloudflare", json.dumps({k: v for k, v in payload.items() if k != "secret"}))
         self.assertEqual(json.loads(decrypt("pw-12345678", payload["secret"]))["liveUrl"], bot.live_url)
 
+    def test_account_holdings_only_in_secret(self):
+        bot = self.make_bot()
+        raw = {"items": [{"symbol": "KO", "name": "코카콜라", "marketCountry": "US", "currency": "USD", "quantity": "120",
+                          "averagePurchasePrice": "72.40", "lastPrice": "66.85",
+                          "marketValue": {"purchaseAmount": "8688.00", "amount": "8022.00"},
+                          "profitLoss": {"amount": "-666.00", "rate": "-0.0767"}}]}
+        payload = build_payload(bot, password="pw-12345678", account=raw)
+        self.assertNotIn("8022", json.dumps({k: v for k, v in payload.items() if k != "secret"}))
+        acct = json.loads(decrypt("pw-12345678", payload["secret"]))["account"]
+        self.assertEqual(acct[0]["symbol"], "KO")
+        self.assertEqual((acct[0]["value"], acct[0]["plRate"], acct[0]["dayRate"]), ("8022.00", "-0.0767", None))
+        self.assertIsNone(json.loads(decrypt("pw-12345678", build_payload(bot, password="pw-12345678")["secret"]))["account"])
+
     def test_no_password_means_no_secret(self):
         bot = self.make_bot()
         self.assertIsNone(build_payload(bot)["secret"])
