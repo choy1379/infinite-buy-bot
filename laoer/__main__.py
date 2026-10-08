@@ -169,6 +169,20 @@ def cmd_realized(bot: Bot, days: int, raw: bool) -> int:
     return 0
 
 
+def cmd_tax(bot: Bot) -> int:
+    from .tax import TaxLog, refresh
+
+    r = refresh(bot.toss, TaxLog(bot.cfg.run.state_dir / "tax.json"))
+    won = lambda v: f"{int(Decimal(v)):,}원"
+    print(f"{r['year']}년 해외주식 양도차익(대략): {won(r['gainKrw'])}")
+    for sym, v in r["bySymbol"].items():
+        print(f"  {sym}: {won(v)}")
+    print(f"기본공제 {won(r['deductionKrw'])} → 과세 {won(r['taxableKrw'])} → 예상 양도세 {won(r['taxKrw'])} (22%)")
+    if r["unknown"]:
+        print("평단을 몰라 뺀 매도(올해 이전에 산 물량):", ", ".join(f"{s} {n}건" for s, n in r["unknown"].items()))
+    return 0
+
+
 def latest_day(bot: Bot) -> str | None:
     days = [d for d, v in bot.state.days.items() if v.get("status") in ("placed", "dry_run", "alert", "placing")]
     return max(days) if days else None
@@ -197,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("realized", help="봇 밖에서 판 종목의 실현 손익을 기록하고 보여줌")
     p.add_argument("--days", type=int, default=14, help="최근 며칠의 종료 주문을 볼지 (기본 14)")
     p.add_argument("--raw", action="store_true", help="기록하지 않고 종료된 주문을 그대로 나열 (토스 앱 주문이 목록에 나오는지 확인용)")
+    sub.add_parser("tax", help="올해 해외주식 양도세 대략치를 계산해서 보여줌")
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
@@ -258,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(bot.place(s, force=args.force), ensure_ascii=False, indent=1))
         elif args.cmd == "realized":
             return cmd_realized(bot, args.days, args.raw)
+        elif args.cmd == "tax":
+            return cmd_tax(bot)
         elif args.cmd == "dashboard":
             if not bot.dashboard:
                 print("config.toml 의 [dashboard] github_token / password 를 먼저 채우세요.")

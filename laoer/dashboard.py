@@ -26,6 +26,7 @@ from decimal import Decimal
 
 from . import __version__
 from .realized import sync_view as realized_view
+from .tax import sync_view as tax_view
 
 log = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ def account_items(result: dict | None) -> list[dict] | None:
 
 
 def build_payload(
-    bot, *, holding=None, price=None, cash=None, session=None, plan=None, password: str = "", days: int = 120, account=None, realized=None
+    bot, *, holding=None, price=None, cash=None, session=None, plan=None, password: str = "", days: int = 120, account=None, realized=None, tax=None
 ) -> dict:
     """bot.state + 실시간 조회값으로 공개/비공개 데이터를 만든다."""
     from .bot import _d, kst  # 순환 import 방지
@@ -258,6 +259,7 @@ def build_payload(
             "liveUrl": getattr(bot, "live_url", None),
             "account": account_items(account),
             "realized": realized,
+            "tax": tax,
             "cycle": None if not cycle else {k: cycle.get(k) for k in ("seed", "unit", "bought", "sold", "fees", "adopted")},
             "days": sec_days,
             "history": history_sec,
@@ -372,13 +374,14 @@ class Dashboard:
         except Exception as e:
             log.warning("대시보드용 계좌 전체 조회 실패: %s", e)
         realized = realized_view(bot)  # 봇 밖에서 판 종목의 실현 손익 (실패해도 빈 값)
+        tax = tax_view(bot)  # 올해 양도세 대략치 (저장된 값, 오래되면 뒤에서 갱신)
         if session and session.date not in bot.state.days:
             try:  # 다음 장 주문 미리 계산 (상태는 바꾸지 않음)
                 plan, _, _ = bot.make_plan(session.date, mutate=False)
             except Exception as e:
                 log.warning("대시보드용 다음 주문 계산 실패: %s", e)
         payload = build_payload(
-            bot, holding=h, price=price, cash=cash, session=session, plan=plan, password=self.password, account=account, realized=realized
+            bot, holding=h, price=price, cash=cash, session=session, plan=plan, password=self.password, account=account, realized=realized, tax=tax
         )
         self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}")
         self.last_published = bot.clock()
