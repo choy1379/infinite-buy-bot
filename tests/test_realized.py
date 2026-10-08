@@ -22,7 +22,7 @@ HOLD = {"items": [{"symbol": "KO", "name": "코카콜라", "quantity": "314", "a
 
 class FakeToss:
     def __init__(self, orders, held=HOLD):
-        self.orders, self.held, self.fx_at, self.fail_orders = orders, held, [], False
+        self.orders, self.held, self.fx_at, self.fail_orders, self.calls = orders, held, [], False, []
 
     def holdings_all(self):
         return self.held
@@ -30,7 +30,10 @@ class FakeToss:
     def closed_orders(self, **kw):
         if self.fail_orders:
             raise RuntimeError("down")
-        return self.orders
+        self.calls.append(kw)
+        sym, a, b = kw.get("symbol"), kw.get("start"), kw.get("end")
+        return [o for o in self.orders if (not sym or o["symbol"] == sym)
+                and (not a or o["orderedAt"][:10] >= a) and (not b or o["orderedAt"][:10] <= b)]
 
     def exchange_rate(self, at=None, **kw):
         self.fx_at.append(at)
@@ -92,7 +95,7 @@ class SyncTest(unittest.TestCase):
 
     def test_cost_from_past_buys_when_not_held(self):
         def o(oid, side, q, px, at):
-            return {**SELL_KO, "orderId": oid, "symbol": "DE", "side": side, "execution": {**SELL_KO["execution"], "filledQuantity": q, "averageFilledPrice": px, "filledAt": at}}
+            return {**SELL_KO, "orderId": oid, "symbol": "DE", "side": side, "orderedAt": at, "execution": {**SELL_KO["execution"], "filledQuantity": q, "averageFilledPrice": px, "filledAt": at}}
         orders = [o("s1", "SELL", "30", "500", "2026-09-28T23:00:00+09:00"), o("b1", "BUY", "20", "400", "2026-09-01T23:00:00+09:00"),
                   o("b2", "BUY", "40", "460", "2026-09-10T23:00:00+09:00"), o("s0", "SELL", "30", "480", "2026-09-20T23:00:00+09:00")]
         got = derive_costs(orders)
@@ -102,6 +105,9 @@ class SyncTest(unittest.TestCase):
         toss = FakeToss(orders, {"items": []})
         new = sync(toss, RealizedLog(self.path), now=datetime(2026, 9, 29, 1, 0, tzinfo=KST))
         self.assertEqual({r["orderId"]: r["cost"] for r in new}, {"s1": "440", "s0": "440"})
+        spans = [(c["start"], c["end"]) for c in toss.calls if c.get("symbol") == "DE"]
+        self.assertGreater(len(spans), 5)  # 1년을 구간으로 나눠 조회
+        self.assertTrue(all(a <= b for a, b in spans))
 
     def test_backfills_old_records_without_cost(self):
         rlog = RealizedLog(self.path)
