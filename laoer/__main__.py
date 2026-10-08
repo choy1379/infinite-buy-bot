@@ -83,7 +83,7 @@ def build_bot(cfg: Config) -> Bot:
     return bot
 
 
-def start_live(cfg: Config, bot: Bot, *, port: int | None = None) -> LiveServer | None:
+def start_live(cfg: Config, bot: Bot, *, port: int | None = None, serve: bool = True) -> LiveServer | None:
     port = cfg.live.port if port is None else port
     if not port:
         return None
@@ -94,6 +94,8 @@ def start_live(cfg: Config, bot: Bot, *, port: int | None = None) -> LiveServer 
     except OSError as e:  # 포트가 이미 쓰이는 중 등 — 봇은 그대로 돈다
         log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
         return None
+    if serve:  # `live` 명령은 직접 serve_forever() 하므로 serve=False
+        srv.start()
     log.info("실시간 호가 페이지: http://localhost:%s/ (같은 와이파이의 폰은 http://<이 PC IP>:%s/)", srv.port, srv.port)
     if cfg.live.tunnel:
         def on_url(url):
@@ -192,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
             start_live(cfg, bot)
             bot.run_forever(quiet=args.quiet)
         elif args.cmd == "live":
-            srv = start_live(cfg, bot, port=args.port or cfg.live.port or 8765)
+            srv = start_live(cfg, bot, port=args.port or cfg.live.port or 8765, serve=False)
             if not srv:
                 return 1
             print(f"실시간 호가 페이지: http://localhost:{srv.port}/  (Ctrl+C 로 종료)")
