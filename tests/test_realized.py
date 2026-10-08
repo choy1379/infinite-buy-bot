@@ -7,7 +7,7 @@ from decimal import Decimal as D
 from pathlib import Path
 from types import SimpleNamespace
 
-from laoer.realized import KST, RealizedLog, build_record, normalize_sell, sync, sync_view
+from laoer.realized import KST, RealizedLog, build_record, derive_costs, normalize_sell, sync, sync_view
 
 SELL_KO = {
     "orderId": "k1", "symbol": "KO", "side": "SELL", "status": "FILLED", "currency": "USD", "quantity": "120", "price": "87.00",
@@ -89,6 +89,29 @@ class SyncTest(unittest.TestCase):
         later = FakeToss([SELL_KO], {"items": []})  # 다 팔아서 보유에서 사라진 뒤
         new = sync(later, RealizedLog(self.path), skip_symbol="TECL", now=self.now)
         self.assertEqual(new[0]["cost"], "87.744493")
+
+    def test_cost_from_past_buys_when_not_held(self):
+        def o(oid, side, q, px, at):
+            return {**SELL_KO, "orderId": oid, "symbol": "DE", "side": side, "execution": {**SELL_KO["execution"], "filledQuantity": q, "averageFilledPrice": px, "filledAt": at}}
+        orders = [o("s1", "SELL", "30", "500", "2026-09-28T23:00:00+09:00"), o("b1", "BUY", "20", "400", "2026-09-01T23:00:00+09:00"),
+                  o("b2", "BUY", "40", "460", "2026-09-10T23:00:00+09:00"), o("s0", "SELL", "30", "480", "2026-09-20T23:00:00+09:00")]
+        got = derive_costs(orders)
+        self.assertEqual(got["s0"], D("440"))  # (20*400+40*460)/60 = 440
+        self.assertEqual(got["s1"], D("440"))  # 팔아도 평단은 그대로
+        self.assertNotIn("x", derive_costs([o("s", "SELL", "5", "1", "2026-09-28T23:00:00+09:00")]))  # 매수 기록 없으면 모름
+        toss = FakeToss(orders, {"items": []})
+        new = sync(toss, RealizedLog(self.path), now=datetime(2026, 9, 29, 1, 0, tzinfo=KST))
+        self.assertEqual({r["orderId"]: r["cost"] for r in new}, {"s1": "440", "s0": "440"})
+
+    def test_backfills_old_records_without_cost(self):
+        rlog = RealizedLog(self.path)
+        rlog.sells["k1"] = build_record(normalize_sell(SELL_KO), None, D("1388.5"), "x")
+        rlog.save()
+        toss = FakeToss([SELL_KO, {**BUY_KO, "execution": {**BUY_KO["execution"], "averageFilledPrice": "80", "filledAt": "2026-09-01T10:00:00+09:00"}}], {"items": []})
+        sync(toss, RealizedLog(self.path), now=self.now)
+        rec = RealizedLog(self.path).sells["k1"]
+        self.assertEqual(rec["cost"], "80")
+        self.assertEqual(rec["plUsd"], "838.66")
 
     def test_sync_view_survives_api_failure_and_keeps_old_records(self):
         bot = SimpleNamespace(cfg=SimpleNamespace(run=SimpleNamespace(state_dir=Path(self.tmp.name))), toss=FakeToss([SELL_KO]), symbol="TECL")
