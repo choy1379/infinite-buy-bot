@@ -20,6 +20,8 @@ class FakeToss:
         self.valid_token = None
         self.rate_limit_once = set()
         self.orders = {}
+        self.order_queries = []
+        self.fx_query = None
 
 
 def make_handler(fake: FakeToss):
@@ -59,7 +61,7 @@ def make_handler(fake: FakeToss):
 
             if url.path == "/api/v1/accounts":
                 return self._send(200, {"result": [{"accountNo": "1", "accountSeq": 7, "accountType": "BROKERAGE"}]})
-            if self.headers.get("X-Tossinvest-Account") is None and url.path not in ("/api/v1/prices", "/api/v1/orderbook"):
+            if self.headers.get("X-Tossinvest-Account") is None and url.path not in ("/api/v1/prices", "/api/v1/orderbook", "/api/v1/exchange-rate"):
                 return self._send(400, {"error": {"requestId": "r", "code": "missing-account", "message": "헤더 누락"}})
             if url.path == "/api/v1/prices":
                 return self._send(200, {"result": [{"symbol": "TECL", "lastPrice": "101.25", "currency": "USD"}]})
@@ -93,6 +95,17 @@ def make_handler(fake: FakeToss):
                         }
                     },
                 )
+            if url.path == "/api/v1/exchange-rate":
+                q = urllib.parse.parse_qs(url.query)
+                fake.fx_query = {k: v[0] for k, v in q.items()}
+                return self._send(200, {"result": {"baseCurrency": "USD", "quoteCurrency": "KRW", "rate": "1388.50", "midRate": "1388.00"}})
+            if url.path == "/api/v1/orders" and method == "GET":
+                q = urllib.parse.parse_qs(url.query)
+                fake.order_queries.append({k: v[0] for k, v in q.items()})
+                page = 2 if q.get("cursor") == ["c1"] else 1
+                if page == 1:
+                    return self._send(200, {"result": {"orders": [{"orderId": "o1"}, {"orderId": "o2"}], "nextCursor": "c1", "hasNext": True}})
+                return self._send(200, {"result": {"orders": [{"orderId": "o3"}], "nextCursor": None, "hasNext": False}})
             if url.path == "/api/v1/orders" and method == "POST":
                 body = json.loads(raw)
                 if body["quantity"] == "0":
@@ -146,6 +159,19 @@ class TossClientTest(unittest.TestCase):
         allh = c.holdings_all()
         self.assertEqual(allh["items"][0]["symbol"], "TECL")
         self.assertNotIn("symbol", [x for x in self.fake.calls if x[1] == "/api/v1/holdings"][-1][4])  # 전체 조회는 종목 필터 없음
+
+    def test_closed_orders_follow_pages_and_send_filters(self):
+        got = self.client().closed_orders(start="2026-10-01", end="2026-10-08")
+        self.assertEqual([o["orderId"] for o in got], ["o1", "o2", "o3"])
+        first, second = self.fake.order_queries
+        self.assertEqual((first["status"], first["from"], first["to"], first["limit"]), ("CLOSED", "2026-10-01", "2026-10-08", "100"))
+        self.assertNotIn("symbol", first)  # 종목 필터 없이 전체
+        self.assertEqual(second["cursor"], "c1")
+
+    def test_exchange_rate_at_time(self):
+        rate = self.client().exchange_rate("2026-10-08T23:40:00+09:00")
+        self.assertEqual(rate, D("1388.50"))
+        self.assertEqual(self.fake.fx_query, {"baseCurrency": "USD", "quoteCurrency": "KRW", "dateTime": "2026-10-08T23:40:00+09:00"})
 
     def test_token_cached_across_clients(self):
         self.client().price("TECL")

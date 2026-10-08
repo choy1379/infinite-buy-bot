@@ -108,6 +108,14 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual((acct[0]["value"], acct[0]["plRate"], acct[0]["dayRate"]), ("8022.00", "-0.0767", None))
         self.assertIsNone(json.loads(decrypt("pw-12345678", build_payload(bot, password="pw-12345678")["secret"]))["account"])
 
+    def test_realized_losses_only_in_secret(self):
+        bot = self.make_bot()
+        realized = {"items": [{"symbol": "KO", "plUsd": "-90.68", "plKrw": "-125908"}], "totalUsd": "-90.68", "totalKrw": "-125908"}
+        payload = build_payload(bot, password="pw-12345678", realized=realized)
+        self.assertNotIn("125890", json.dumps({k: v for k, v in payload.items() if k != "secret"}))
+        self.assertEqual(json.loads(decrypt("pw-12345678", payload["secret"]))["realized"]["totalKrw"], "-125908")
+        self.assertIsNone(json.loads(decrypt("pw-12345678", build_payload(bot, password="pw-12345678")["secret"]))["realized"])
+
     def test_no_password_means_no_secret(self):
         bot = self.make_bot()
         self.assertIsNone(build_payload(bot)["secret"])

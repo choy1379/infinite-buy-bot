@@ -316,6 +316,24 @@ class TossClient:
         r = self._call("GET", "/api/v1/orders", params={"status": "OPEN", "symbol": symbol}, account=True)["result"]
         return r.get("orders", [])
 
+    def closed_orders(self, *, symbol: str | None = None, start: str | None = None, end: str | None = None, max_pages: int = 20) -> list[dict]:
+        """종료된 주문(체결·취소 등) 목록. start/end 는 YYYY-MM-DD(KST, 주문시각 기준). 페이지를 끝까지 따라간다."""
+        out: list[dict] = []
+        cursor = None
+        for _ in range(max_pages):
+            params = {"status": "CLOSED", "symbol": symbol, "from": start, "to": end, "cursor": cursor, "limit": 100}
+            r = self._call("GET", "/api/v1/orders", params=params, account=True)["result"]
+            out.extend(r.get("orders") or [])
+            cursor = r.get("nextCursor")
+            if not r.get("hasNext") or not cursor:
+                break
+        return out
+
+    def exchange_rate(self, at: str | None = None, base: str = "USD", quote: str = "KRW") -> Decimal:
+        """원/달러 환율. at(ISO 시각)을 주면 그 시점 환율."""
+        r = self._call("GET", "/api/v1/exchange-rate", params={"baseCurrency": base, "quoteCurrency": quote, "dateTime": at})["result"]
+        return Decimal(str(r["rate"]))
+
     def place_order(
         self, *, symbol: str, side: str, tif: str, qty: int, price: Decimal, client_order_id: str, order_type: str = "LIMIT"
     ) -> str:

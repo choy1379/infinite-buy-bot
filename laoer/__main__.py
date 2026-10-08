@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import urllib.parse
+from decimal import Decimal
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -139,6 +140,35 @@ def cmd_market() -> int:
     return 0 if all("error" not in r for r in rows) else 1
 
 
+def cmd_realized(bot: Bot, days: int, raw: bool) -> int:
+    from datetime import datetime, timedelta
+
+    from .realized import KST, RealizedLog, sync
+
+    if raw:
+        start = (datetime.now(KST) - timedelta(days=days)).date().isoformat()
+        for o in bot.toss.closed_orders(start=start):
+            ex = o.get("execution") or {}
+            print(
+                f"{o.get('orderedAt', '')[:19]}  {o.get('symbol'):<6} {o.get('side'):<4} {o.get('status'):<9} "
+                f"주문 {o.get('quantity')}@{o.get('price')}  체결 {ex.get('filledQuantity')}@{ex.get('averageFilledPrice')} "
+                f"수수료 {ex.get('commission')} 세금 {ex.get('tax')}  {o.get('orderId')}"
+            )
+        return 0
+    rlog = RealizedLog(bot.cfg.run.state_dir / "realized.json")
+    new = sync(bot.toss, rlog, skip_symbol=bot.symbol, days=days)
+    print(f"새로 기록한 매도 {len(new)}건")
+    view = rlog.view()
+    for r in view["items"]:
+        pl_usd = f"${r['plUsd']}" if r.get("plUsd") is not None else "–"
+        pl_krw = f"{int(Decimal(r['plKrw'])):,}원" if r.get("plKrw") is not None else "–"
+        print(f"  {r['date']} {r['symbol']} {r['qty']}주 매도 {r['price']} (평단 {r['cost']}) → 손익 {pl_usd} / {pl_krw} (환율 {r['fx']})")
+    tu = f"${view['totalUsd']}" if view["totalUsd"] is not None else "–"
+    tk = f"{int(Decimal(view['totalKrw'])):,}원" if view["totalKrw"] is not None else "–"
+    print(f"합계: {tu} / {tk}")
+    return 0
+
+
 def latest_day(bot: Bot) -> str | None:
     days = [d for d, v in bot.state.days.items() if v.get("status") in ("placed", "dry_run", "alert", "placing")]
     return max(days) if days else None
@@ -164,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("notify-test", help="디스코드/카톡 테스트 메시지")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
+    p = sub.add_parser("realized", help="봇 밖에서 판 종목의 실현 손익을 기록하고 보여줌")
+    p.add_argument("--days", type=int, default=14, help="최근 며칠의 종료 주문을 볼지 (기본 14)")
+    p.add_argument("--raw", action="store_true", help="기록하지 않고 종료된 주문을 그대로 나열 (토스 앱 주문이 목록에 나오는지 확인용)")
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
@@ -223,6 +256,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{s.date} 은 이미 처리됨 ({prev.get('status')}). 다시 내려면 --force")
                 return 1
             print(json.dumps(bot.place(s, force=args.force), ensure_ascii=False, indent=1))
+        elif args.cmd == "realized":
+            return cmd_realized(bot, args.days, args.raw)
         elif args.cmd == "dashboard":
             if not bot.dashboard:
                 print("config.toml 의 [dashboard] github_token / password 를 먼저 채우세요.")
