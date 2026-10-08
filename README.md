@@ -135,6 +135,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 | `dashboard` | 모니터링 페이지 데이터를 지금 갱신 |
 | `live` | 실시간 호가 페이지만 띄움 (`run` 은 자동으로 같이 띄움) |
 | `market` | '시장' 탭 선물 시세가 받아지는지 확인 (설정 없이 됨) |
+| `realized [--days N] [--raw]` | 봇 밖(토스 앱 등)에서 판 종목의 실현 손익을 기록하고 보여줌 (`--raw`는 종료된 주문을 그대로 나열) |
 | `notify-test` | 알림 테스트 |
 | `kakao-login` | 카카오 토큰 발급 |
 
@@ -216,6 +217,15 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 3. `python -m laoer dashboard` 로 한 번 올려보고 페이지 확인 → `stop.cmd` / `start.cmd` 로 봇 재시작
 
 
+
+### 실현 손익 기록 (봇 밖에서 판 종목)
+
+토스 앱 등 **봇 밖에서 판 종목**의 손익은 잠금 해제 후 **실현 손익 기록** 칸에 남아요 (매도일, 수량, 매도가, 평단, 손익 달러·원화, 합계).
+
+- 토스 Open API 에는 '실현 손익'이 따로 없어서, 종료된 주문 목록(`GET /orders?status=CLOSED`)의 체결 수량·평균가·수수료·세금과 보유 종목의 평균 매수가로 직접 계산해요: `(매도가 − 평단) × 수량 − 수수료 − 세금`.
+- 원화는 그 손익에 **체결 시각의 토스 환율**(`GET /exchange-rate`)을 곱한 값이에요. 토스 앱이 보여주는 원화 손익은 산 때의 환율까지 반영해서 조금 다를 수 있어요.
+- 대시보드를 올릴 때마다 최근 14일의 새 매도를 `state/realized.json` 에 기록해요. 한 번 기록한 건 그대로 두고, 종목을 다 팔아도 마지막 평단을 보관해요. 봇 종목(TECL)은 사이클 이력이 따로 있어 빼요.
+- `python -m laoer realized` 로 지금 바로 기록·확인하고, `--raw` 로 토스가 주는 종료 주문 목록을 그대로 볼 수 있어요.
 
 ### 실시간 호가 (봇 PC에서)
 
@@ -314,6 +324,7 @@ laoer/
   dashboard.py  모니터링 페이지 데이터 (암호화 후 GitHub에 올림)
   live.py       봇 PC의 실시간 호가 페이지 서버
   market.py     시장 탭 선물 시세 (네이버·야후)
+  realized.py   봇 밖에서 판 종목의 실현 손익 기록
   config.py     config.toml 로딩
   state.py      state/state.json 저장
 index.html      모니터링 페이지 (GitHub Pages, 봇 PC에서는 실시간 호가 포함)

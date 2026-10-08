@@ -194,6 +194,8 @@
     15%, 45%, 75%, 100% { background: transparent; color: inherit; }
   }
   @media (prefers-reduced-motion: reduce) { .acct .live-dot.flash .t { animation: none; background: var(--line); } }
+  .real .rrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; }
+  .real .rrow + .rrow { border-top: 1px solid var(--line); }
   .acct .tk { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 6px; }
   .acct .det { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; max-width: 360px; margin-top: -4px; color: var(--muted); font-size: 0.72rem; }
   .acct .det span { display: block; min-width: 0; }
@@ -245,6 +247,7 @@
   </section>
   <section class="card" id="secret" hidden></section>
   <section class="card acct" id="acct" hidden></section>
+  <section class="card acct real" id="realized" hidden></section>
 
   <section id="next" hidden></section>
 
@@ -480,6 +483,26 @@
     const stamp = acctLive ? (acctOk ? `<span class="live-dot${flash ? ' flash' : ''}">실시간 <span class="t">${hms(acctLive)}</span></span>` : `<span class="muted">연결 끊김 · ${hm(acctLive)} 데이터</span>`)
       : (data && data.updatedAt ? `<span class="muted">${kst(data.updatedAt)} 기준</span>` : '');
     box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span> <span class="stamp">${stamp}</span></h2>${rows}<div class="tot">${tots}</div>`;
+  }
+
+  // ---- 실현 손익 기록: 봇 밖(토스 앱 등)에서 판 종목. 달러 손익 + 매도 시점 환율로 환산한 원화 (잠금 해제 시)
+  function renderRealized() {
+    const box = el('realized'), r = secret && secret.realized;
+    if (!r || !(r.items || []).length) { box.hidden = true; return; }
+    box.hidden = false;
+    const wonS = v => num(v) === null ? '–' : (num(v) < 0 ? '-' : (num(v) > 0 ? '+' : '')) + '₩' + Math.abs(Math.round(num(v))).toLocaleString('ko-KR');
+    const rows = r.items.map(it => {
+      const cur = it.currency || 'USD';
+      return `<div class="rrow">
+        <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span></div>
+          <div class="sub mono">${esc(md(it.date))} · ${qty(it.qty)}주 · 매도 ${money(it.price, cur)}${num(it.cost) === null ? '' : ` · 평단 ${money(it.cost, cur)}`}</div></div>
+        <div class="rt"><div class="mono ${sign(cur === 'KRW' ? it.plKrw : it.plUsd)}">${cur === 'KRW' ? wonS(it.plKrw) : sgnMoney(it.plUsd, 'USD')}</div>
+          ${cur === 'KRW' ? '' : `<div class="sub mono ${sign(it.plKrw)}">${wonS(it.plKrw)}</div>`}</div></div>`;
+    }).join('');
+    const tot = `<span>합계 <span class="mono ${sign(r.totalUsd)}">${num(r.totalUsd) === null ? '' : sgnMoney(r.totalUsd, 'USD')}</span>
+      <span class="mono ${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span></span>`;
+    box.innerHTML = `<h2>실현 손익 기록 <span class="muted" style="font-weight:400;font-size:0.85rem">봇 밖에서 판 내역</span></h2>${rows}<div class="tot">${tot}</div>
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -920,6 +943,7 @@
         price: String(close), cash: (SEED - bought + sold).toFixed(2),
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
+        realized: { items: [{ symbol: 'KO', name: '코카콜라', currency: 'USD', date: '2026-10-08', qty: '120', price: '87.00', cost: '87.74', plUsd: '-89.40', plKrw: '-124000', fx: '1388.5' }], totalUsd: '-89.40', totalKrw: '-124000' },
         account: [
           ...(qty ? [{ symbol: 'TECL', name: 'Direxion Daily Technology Bull 3X', market: 'US', currency: 'USD', qty: String(qty), avg: avg.toFixed(4), last: String(close),
             purchase: (qty * avg).toFixed(2), value: (qty * close).toFixed(2), pl: (qty * (close - avg)).toFixed(2), plRate: String(close / avg - 1), dayRate: '0.0131' }] : []),
@@ -933,7 +957,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderNext(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderNext(); renderDays(); renderHistory();
   }
 
   async function load() {
