@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .bot import Bot
 from .config import Config, ConfigError, load_config
-from .dashboard import Dashboard, GitHubPublisher
+from .dashboard import Dashboard, GitHubPublisher, live_account_fetcher
 from .live import LiveServer
 from .market import Market
 from .tunnel import QuickTunnel
@@ -90,7 +90,8 @@ def start_live(cfg: Config, bot: Bot, *, port: int | None = None, serve: bool = 
     dash = cfg.dashboard
     url = f"https://raw.githubusercontent.com/{dash.repo}/{dash.branch}/dashboard.json" if dash else None
     try:
-        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url)
+        account = live_account_fetcher(bot.toss, dash.password) if dash else None
+        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url, account=account)
     except OSError as e:  # 포트가 이미 쓰이는 중 등 — 봇은 그대로 돈다
         log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
         return None

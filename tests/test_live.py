@@ -6,6 +6,7 @@ import unittest
 import urllib.error
 import urllib.request
 
+from laoer.dashboard import decrypt, live_account_fetcher
 from laoer.live import LiveServer, _Cache, orderbook_payload
 
 BOOK = {
@@ -75,12 +76,28 @@ class FakeMarket:
         return {"rows": [{"id": "wti", "name": "WTI 원유", "price": 90.55}]}
 
 
+class FakeAccount:
+    def __init__(self):
+        self.calls = 0
+
+    def holdings_all(self):
+        self.calls += 1
+        return {"items": [{"symbol": "KO", "name": "코카콜라", "currency": "USD", "quantity": "434", "lastPrice": "85.98"}]}
+
+    def buying_power(self, cur):
+        return "3270.55"
+
+
 class ServerTest(unittest.TestCase):
     def setUp(self):
         self.toss = FakeToss()
         self.clock = Clock()
         self.market = FakeMarket()
-        self.srv = LiveServer(self.toss, "TECL", host="127.0.0.1", port=0, clock=self.clock, market=self.market).start()
+        self.acct = FakeAccount()
+        self.srv = LiveServer(
+            self.toss, "TECL", host="127.0.0.1", port=0, clock=self.clock, market=self.market,
+            account=live_account_fetcher(self.acct, "pw-12345678"),
+        ).start()
         self.base = f"http://127.0.0.1:{self.srv.port}"
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -123,6 +140,33 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(r.headers["Access-Control-Allow-Private-Network"], "true")
         _, page_headers, _ = self.get("/")
         self.assertIsNone(page_headers["Access-Control-Allow-Origin"])
+
+    def test_account_is_encrypted_cached_with_cors(self):
+        status, headers, body = self.get("/api/account")
+        self.get("/api/account")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn(b"434", body)  # 보유 수량이 평문으로 나가면 안 됨
+        self.assertNotIn("코카콜라".encode(), body)
+        got = json.loads(decrypt("pw-12345678", json.loads(body)))
+        self.assertEqual(got["cash"], "3270.55")
+        self.assertEqual(got["account"][0]["symbol"], "KO")
+        self.assertEqual(got["account"][0]["qty"], "434")
+        with self.assertRaises(ValueError):
+            decrypt("wrong-password", json.loads(body))
+        self.assertEqual(self.acct.calls, 1)  # 30초 캐시: 여러 기기가 봐도 토스 호출은 한 번
+        self.clock.t = 30.0
+        self.get("/api/account")
+        self.assertEqual(self.acct.calls, 2)
+
+    def test_account_route_absent_without_password(self):
+        srv = LiveServer(self.toss, "TECL", host="127.0.0.1", port=0, clock=self.clock, market=self.market).start()
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                self.opener.open(f"http://127.0.0.1:{srv.port}/api/account", timeout=5)
+            self.assertEqual(cm.exception.code, 404)
+        finally:
+            srv.close()
 
     def test_orderbook_error_is_502(self):
         self.toss.fail = RuntimeError("403 IP")

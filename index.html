@@ -184,6 +184,9 @@
   .acct .logo.txt { display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 0.72rem; letter-spacing: -0.02em; border: 0; overflow: hidden; }
   .acct .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acct .sub { color: var(--muted); font-size: 0.82rem; }
+  .acct .stamp { float: right; font-weight: 400; font-size: 0.78rem; }
+  .acct .live-dot { color: var(--buy); }
+  .acct .live-dot::before { content: "●"; margin-right: 4px; font-size: 0.7em; vertical-align: 1px; }
   .acct .tk { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 6px; }
   .acct .det { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; max-width: 360px; margin-top: -4px; color: var(--muted); font-size: 0.72rem; }
   .acct .det span { display: block; min-width: 0; }
@@ -309,12 +312,19 @@
   // ---- 복호화: PBKDF2-SHA256 → HMAC-SHA256 카운터 모드 (봇의 laoer/dashboard.py 와 동일)
   const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const cat = (a, b) => { const o = new Uint8Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+  const keyCache = new Map();  // 30초마다 오는 실시간 계좌는 솔트가 같아서 키를 다시 만들지 않음
   async function decrypt(pw, box) {
     const subtle = crypto.subtle;
-    const base = await subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
-    const bits = new Uint8Array(await subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(box.salt), iterations: box.iter }, base, 512));
-    const hk = raw => subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const ek = await hk(bits.slice(0, 32)), mk = await hk(bits.slice(32));
+    const ck = `${box.iter}:${box.salt}:${pw}`;
+    let keys = keyCache.get(ck);
+    if (!keys) {
+      const base = await subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+      const bits = new Uint8Array(await subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(box.salt), iterations: box.iter }, base, 512));
+      const hk = raw => subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      keys = [await hk(bits.slice(0, 32)), await hk(bits.slice(32))];
+      keyCache.clear(); keyCache.set(ck, keys);
+    }
+    const [ek, mk] = keys;
     const nonce = b64(box.nonce), ct = b64(box.ct), want = b64(box.mac);
     const mac = new Uint8Array(await subtle.sign('HMAC', mk, cat(nonce, ct)));
     if (mac.length !== want.length || mac.some((b, i) => b !== want[i])) throw new Error('bad-password');
@@ -336,6 +346,7 @@
       useTunnel(secret.liveUrl);
       el('lock').hidden = true;
       render();
+      pollAccount();
     } catch (e) {
       secret = null;
       if (!quiet) { el('lockmsg').textContent = '비밀번호가 맞지 않아요.'; el('pw').select(); }
@@ -351,7 +362,7 @@
   });
 
   function lockAgain() {
-    secret = null; password = null;
+    secret = null; password = null; acctLive = null; acctOk = false; clearTimeout(acctTimer);
     try { localStorage.removeItem(PW_KEY); } catch (e) {}
     el('pw').value = '';
     el('lock').hidden = false;
@@ -456,7 +467,10 @@
     }
     const tots = Object.entries(tot).map(([cur, t]) => `<span>${cur === 'KRW' ? '원화' : '달러'} 합계 <span class="mono">${money(t.value, cur)}</span>
       <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span></span>`).join('');
-    box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span></h2>${rows}<div class="tot">${tots}</div>`;
+    const hm = iso => kst(iso).split(' ')[1];
+    const stamp = acctLive ? (acctOk ? `<span class="live-dot">실시간 ${hm(acctLive)}</span>` : `<span class="muted">연결 끊김 · ${hm(acctLive)} 데이터</span>`)
+      : (data && data.updatedAt ? `<span class="muted">${kst(data.updatedAt)} 기준</span>` : '');
+    box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span> <span class="stamp">${stamp}</span></h2>${rows}<div class="tot">${tots}</div>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -690,6 +704,33 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollBook(); });
   pollBook();
+
+  // ---- 실시간 계좌: 봇 PC가 암호화해서 주는 /api/account 를 비밀번호를 푼 동안만 30초마다 받음 (실패하면 올려둔 데이터 그대로)
+  const ACCT_MS = 30000;
+  let acctTimer = null, acctLive = null, acctOk = false;  // acctLive = 마지막으로 실시간 갱신된 시각(ISO), acctOk = 지금 연결 중인지
+  async function pollAccount() {
+    clearTimeout(acctTimer);
+    if (!password || !secret || DEMO) return;
+    if (!document.hidden) {
+      try {
+        const res = await fetch(`${LIVE}api/account?t=${Date.now()}`, { cache: 'no-store' });
+        if (res.status === 404) return;   // 봇이 띄운 페이지/터널이 아니거나 계좌 조회를 안 함 → 올려둔 데이터만
+        const box = await res.json();
+        if (!res.ok) throw new Error(box.error || res.status);
+        const live = await decrypt(password, box);
+        if (password && secret) {
+          secret.account = live.account;
+          if (live.cash != null) secret.cash = live.cash;
+          acctLive = live.at; acctOk = true;
+          renderAccount(); renderSecret();
+        }
+      } catch (e) {
+        if (acctLive && acctOk) { acctOk = false; renderAccount(); }   // 끊기면 마지막 실시간 데이터라고 표시
+      }
+    }
+    acctTimer = setTimeout(pollAccount, ACCT_MS);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && password) pollAccount(); });
 
   // ---- 시장 탭: 선물 시세(봇 PC의 /api/market) + TradingView 미국 주식 히트맵
   const TAB_KEY = 'tecl-dashboard-tab';
