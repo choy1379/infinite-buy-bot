@@ -192,6 +192,8 @@
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
   footer p { margin: 0; max-width: 65ch; }
   @media (max-width: 420px) { .kv { grid-template-columns: 1fr; } .stat .value { font-size: 1.25rem; } }
+  .fx{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:0.88rem;margin:-4px 0 14px;color:var(--muted)}
+  .fx b{color:var(--ink);font-weight:600}
 </style>
 </head>
 <body>
@@ -205,6 +207,7 @@
 
   <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
   <div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
+  <div class="fx mono" id="fx" aria-label="실시간 환율" hidden></div>
   <div id="notice"></div>
 
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
@@ -694,7 +697,8 @@
       try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
       history.replaceState(null, '', name === 'market' ? '#market' : location.pathname + location.search);
     }
-    if (name === 'market') { loadHeat(); pollMarket(); }
+    if (name === 'market') loadHeat();
+    pollMarket();
   }
   for (const t of ['bot', 'market']) el(`tabbtn-${t}`).addEventListener('click', () => showTab(t, true));
 
@@ -724,7 +728,7 @@
   function renderMarket(m) {
     const rows = m.rows || [];
     el('mkt-at').textContent = m.fetchedAt ? `${kst(m.fetchedAt)} 기준` : '';
-    el('mkt').innerHTML = `<div class="table-wrap"><table aria-label="선물 시세">
+    el('mkt').innerHTML = `<div class="table-wrap"><table aria-label="선물·환율 시세">
       <thead><tr><th>종목</th><th class="num">가격</th><th class="num">변동</th><th class="num">변동%</th><th class="num at">시간</th></tr></thead>
       <tbody>${rows.map(r => r.error
         ? `<tr><td class="name">${esc(r.name)}</td><td class="num muted" colspan="3">못 받았어요</td><td class="num at"></td></tr>`
@@ -741,18 +745,33 @@
       { name: 'WTI 원유', price: 90.55, change: 1.11, pct: 1.24, at: at('22:30') },
       { name: 'S&P500 E-mini', price: 7839.5, change: -34.5, pct: -0.44, at: at('22:30') },
       { name: '나스닥100 E-mini', price: 31232.5, change: -250.75, pct: -0.80, at: at('22:30') },
+      { id: 'usdkrw', name: '원/달러 환율', price: 1418.35, change: 3.2, pct: 0.23, at: at('22:39') },
+      { id: 'jpykrw', name: '원/엔 환율 (100엔)', price: 935.12, change: -1.48, pct: -0.16, at: at('22:39') },
     ] };
+  }
+  // 메인 탭 한 줄 환율 (같은 /api/market 응답에서 꺼냄)
+  const FX = [['usdkrw', '원/달러'], ['jpykrw', '원/100엔']];
+  function renderFx(m) {
+    const rows = Object.fromEntries((m.rows || []).map(r => [r.id, r]));
+    const items = FX.map(([id, label]) => rows[id] && !rows[id].error && [label, rows[id]]).filter(Boolean);
+    el('fx').hidden = !items.length;
+    el('fx').innerHTML = items.map(([label, r]) =>
+      `<span>${label} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
   }
   async function pollMarket() {
     clearTimeout(mktTimer);
-    if (!marketOpen() || document.hidden) return;
-    if (DEMO) { renderMarket(demoMarket()); return; }
+    if (document.hidden) return;
+    if (DEMO) { const m = demoMarket(); renderFx(m); if (marketOpen()) renderMarket(m); return; }
     try {
       const res = await fetch(`${LIVE}api/market?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.status === 404 && !marketOpen()) return;   // 봇이 띄운 페이지가 아님 → 환율 줄 숨긴 채 끝
       const m = await res.json();
       if (!res.ok) throw new Error(m.error || res.status);
-      renderMarket(m);
+      renderFx(m);
+      if (marketOpen()) renderMarket(m);
     } catch (e) {
+      el('fx').hidden = true;
+      if (!marketOpen()) { mktTimer = setTimeout(pollMarket, MKT_MS); return; }
       if (!el('mkt').querySelector('table'))
         el('mkt').innerHTML = '<div class="err">선물 시세는 봇이 도는 PC(또는 같은 와이파이의 PC IP:8765)에서 열었을 때 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
     }

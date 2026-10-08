@@ -129,6 +129,15 @@ class SnapshotTest(unittest.TestCase):
         self.assertIn("down", rows["es"]["error"])
         self.assertIn("error", rows["nq"])
 
+    def test_fx_rows_and_yen_per_100(self):
+        yen = {"chart": {"result": [{"meta": {"regularMarketPrice": 9.3512, "previousClose": 9.366, "regularMarketTime": 1791379800}}]}}
+        opener = FakeOpener({"JPYKRW%3DX": yen, "KRW%3DX": YAHOO})
+        rows = {r["id"]: r for r in Market(opener=opener).snapshot()["rows"]}
+        self.assertEqual(rows["usdkrw"]["price"], 90.55)
+        self.assertEqual(rows["jpykrw"]["price"], 935.12)  # 1엔 → 100엔 기준
+        self.assertEqual(rows["jpykrw"]["change"], -1.48)
+        self.assertEqual(rows["jpykrw"]["pct"], -0.16)
+
 
 if __name__ == "__main__":
     unittest.main()

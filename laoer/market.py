@@ -1,4 +1,4 @@
-"""'시장' 탭 시세: 코스피200 선물(야간 포함), WTI, 미국 지수 선물.
+"""'시장' 탭 시세: 코스피200 선물(야간 포함), WTI, 미국 지수 선물, 원/달러·원/엔 환율.
 
 브라우저(GitHub Pages)는 CORS 때문에 네이버/야후를 직접 못 부르니 봇 PC가 대신 받아 /api/market 으로 넘긴다.
 둘 다 공개 시세이고 비공식 API라 형식이 바뀔 수 있다. 종목마다 따로 받아서 하나가 실패해도 나머지는 보인다.
@@ -27,7 +27,10 @@ SYMBOLS = [
     ("wti", "WTI 원유", "yahoo", "CL=F"),
     ("es", "S&P500 E-mini", "yahoo", "ES=F"),
     ("nq", "나스닥100 E-mini", "yahoo", "NQ=F"),
+    ("usdkrw", "원/달러 환율", "yahoo", "KRW=X"),
+    ("jpykrw", "원/엔 환율 (100엔)", "yahoo", "JPYKRW=X"),
 ]
+SCALE = {"jpykrw": 100}  # 야후는 1엔당 원이라, 흔히 보는 100엔 기준으로 바꿈
 # m.stock.naver.com 은 robots.txt 가 전체 금지라 쓰지 않음. polling.finance.naver.com 은 규칙 없음
 NAVER_URLS = [
     "https://polling.finance.naver.com/api/realtime/domestic/index/{code}",
@@ -177,6 +180,10 @@ class Market:
         row = {"id": sid, "name": name}
         try:
             row.update(self.quote(source, code))
+            if sid in SCALE:
+                for k in ("price", "change"):
+                    if row.get(k) is not None:
+                        row[k] = round(row[k] * SCALE[sid], 4)
             if sid == "k200f":
                 # 네이버는 주간 시세만 줌(야간은 없음). 야간에 찍힌 값이면 야간선물, 아니면 주간 종가로 정직하게 표시
                 night = self._night(row)
