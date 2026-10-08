@@ -24,6 +24,7 @@ KST = timezone(timedelta(hours=9))
 CENT = Decimal("0.01")
 WON = Decimal("1")
 HISTORY_DAYS = 365  # 평단 계산용 과거 체결 조회 기간
+HISTORY_STEP = 30  # 한 번에 조회하는 구간(일)
 
 
 def _d(v) -> Decimal | None:
@@ -158,6 +159,18 @@ def build_record(sell: dict, cost: Decimal | None, fx: Decimal | None, name: str
     }
 
 
+def _orders_over_time(toss, symbol: str, now: datetime, step: int = HISTORY_STEP) -> list[dict]:
+    """한 종목의 종료 주문을 HISTORY_DAYS일 전까지 step일 구간으로 나눠 받는다."""
+    out: list[dict] = []
+    end = now.astimezone(KST).date()
+    floor = end - timedelta(days=HISTORY_DAYS)
+    while end >= floor:
+        begin = max(end - timedelta(days=step - 1), floor)
+        out.extend(toss.closed_orders(symbol=symbol, start=begin.isoformat(), end=end.isoformat()))
+        end = begin - timedelta(days=1)
+    return out
+
+
 def _rec_to_sell(rec: dict) -> dict:
     return {
         "orderId": rec["orderId"], "symbol": rec["symbol"], "currency": rec["currency"],
@@ -187,11 +200,17 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
     fresh = [s for s in map(normalize_sell, recent) if s and s["symbol"] != skip_symbol and s["orderId"] not in rlog.sells]
     unknown = [r for r in rlog.sells.values() if r.get("cost") is None]
     derived: dict[str, Decimal] = {}
-    if any(rlog.costs.get(s["symbol"]) is None for s in fresh) or unknown:
-        try:  # 이미 다 판 종목은 보유 목록에 평단이 없으니, 과거 매수 체결로 계산한다
-            derived = derive_costs(toss.closed_orders(start=(now.astimezone(KST) - timedelta(days=HISTORY_DAYS)).date().isoformat()))
-        except Exception as e:
-            log.warning("실현손익: 과거 매수 조회 실패: %s", e)
+    need = {x["symbol"] for x in fresh if rlog.costs.get(x["symbol"]) is None} | {r["symbol"] for r in unknown}
+    if need:
+        # 이미 다 판 종목은 보유 목록에 평단이 없으니, 종목별로 과거 체결을 모아 계산한다 (기간 전체를 한 번에 받으면 서버가 앞부분만 줘서 구간을 나눈다)
+        history: dict[str, dict] = {}
+        for sym in sorted(need):
+            try:
+                for o in _orders_over_time(toss, sym, now):
+                    history[str(o.get("orderId"))] = o
+            except Exception as e:
+                log.warning("실현손익: 과거 매수 조회 실패(%s): %s", sym, e)
+        derived = derive_costs(list(history.values()))
     for rec in unknown:  # 예전에 평단 없이 기록한 매도 보충
         cost = derived.get(rec["orderId"])
         if cost is not None:
