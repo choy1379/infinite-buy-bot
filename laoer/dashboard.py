@@ -66,6 +66,22 @@ def decrypt(password: str, box: dict) -> bytes:
     return bytes(a ^ b for a, b in zip(ct, _keystream(enc_key, nonce, len(ct))))
 
 
+def live_account_fetcher(toss, password: str):
+    """/api/account 용: 계좌 전체 + 매수가능 현금을 조회해 대시보드 비밀번호로 암호화해 돌려준다.
+    금액이라 터널 주소를 아는 사람이 봐도 안 보이게 암호문만 내보낸다. 솔트는 실행마다 하나라 브라우저가 키를 재사용한다."""
+    salt = os.urandom(16)
+
+    def fetch() -> dict:
+        body = {
+            "account": account_items(toss.holdings_all()) or [],
+            "cash": _s(toss.buying_power("USD")),
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        return encrypt(password, json.dumps(body, ensure_ascii=False).encode("utf-8"), salt=salt)
+
+    return fetch
+
+
 # ----------------------------------------------------------------- payload
 def _s(v) -> str | None:
     return None if v is None else str(v)

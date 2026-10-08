@@ -6,10 +6,11 @@ GitHub Pages 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 �
   /dashboard.json  -> GitHub 의 dashboard.json 을 대신 받아 전달 (30초 캐시)
   /api/orderbook   -> 토스 GET /api/v1/orderbook (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회)
   /api/market      -> '시장' 탭 선물 시세 (네이버/야후, 10초 캐시, laoer/market.py)
+  /api/account     -> 계좌 전체 보유(대시보드 비밀번호로 암호화한 상태로만, 30초 캐시)
 를 제공한다. 페이지는 /api/orderbook 이 응답하면 '실시간 호가' 칸을 보여준다.
 GitHub Pages 페이지도 이 PC의 브라우저에서는 http://localhost:8765/api/orderbook 을 부를 수 있게
 /api/* 에 CORS(+ Chrome 사설망 접근 preflight) 헤더를 붙인다.
-공개 시세와 이미 공개된 dashboard.json 만 내보내고, 계좌 정보는 다루지 않는다.
+공개 시세와 이미 공개된 dashboard.json 은 그대로, 계좌 정보는 암호문으로만 내보낸다(터널 주소가 새도 비밀번호 없이는 못 읽음).
 """
 
 from __future__ import annotations
@@ -85,6 +86,8 @@ class LiveServer:
         dashboard_ttl: float = 30.0,
         market: Market | None = None,
         market_ttl: float = 10.0,
+        account=None,
+        account_ttl: float = 30.0,
         opener: urllib.request.OpenerDirector | None = None,
         clock=time.monotonic,
     ):
@@ -95,6 +98,7 @@ class LiveServer:
         self.orderbook = _Cache(lambda: orderbook_payload(symbol, toss.orderbook(symbol)), orderbook_ttl, clock)
         self.dashboard = _Cache(self._fetch_dashboard, dashboard_ttl, clock)
         self.market = _Cache((market or Market()).snapshot, market_ttl, clock)
+        self.account = _Cache(account, account_ttl, clock) if account else None
         self.httpd = ThreadingHTTPServer((host, port), self._handler())
         self.httpd.daemon_threads = True
 
@@ -110,6 +114,8 @@ class LiveServer:
     def _handler(self):
         server = self
         API = {"/api/orderbook": self.orderbook, "/api/market": self.market}
+        if self.account:
+            API["/api/account"] = self.account
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, fmt, *args):  # 초당 요청이 들어오니 bot.log 에 남기지 않음
