@@ -184,6 +184,13 @@
   .acct .logo.txt { display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 0.72rem; letter-spacing: -0.02em; border: 0; overflow: hidden; }
   .acct .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acct .sub { color: var(--muted); font-size: 0.82rem; }
+  .acct .tk { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 6px; }
+  .acct .det { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; max-width: 360px; margin-top: -4px; color: var(--muted); font-size: 0.72rem; }
+  .acct .det span { display: block; min-width: 0; }
+  .acct .det b { display: block; color: var(--ink); font-weight: 600; font-size: 0.95rem; white-space: nowrap; }
+  .acct .det b.up { color: var(--buy); } .acct .det b.down { color: var(--sell); }
+  .acct .row > .logo { grid-row: 1 / span 2; }
+  @media (max-width: 480px) { .acct .det b { font-size: 0.88rem; } }
   .acct .rt { text-align: right; white-space: nowrap; }
   .acct .tot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding-top: 10px; margin-top: 4px; border-top: 2px solid var(--line); font-size: 0.9rem; }
   .acct .bot { font-size: 0.7rem; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
@@ -434,11 +441,13 @@
       const r = num(it.plRate), dr = num(it.dayRate);
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
       return `<div class="row">${logo(it)}
-        <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}${isBot ? '<span class="bot">봇</span>' : ''}</div>
-          <div class="sub mono">${esc(it.symbol)} · ${qty(it.qty)}주 · 평단 ${money(it.avg, it.currency)} · 현재 ${money(it.last, it.currency)}</div></div>
+        <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
-          ${dr === null ? '' : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div></div>`;
+          ${dr === null ? '' : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div>
+        <div class="det"><span>보유<b class="mono">${qty(it.qty)}주</b></span>
+            <span>평단<b class="mono">${money(it.avg, it.currency)}</b></span>
+            <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div></div>`;
     }).join('');
     const tot = {};
     for (const it of items) {
