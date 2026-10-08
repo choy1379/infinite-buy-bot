@@ -187,6 +187,13 @@
   .acct .stamp { float: right; font-weight: 400; font-size: 0.78rem; }
   .acct .live-dot { color: var(--buy); }
   .acct .live-dot::before { content: "●"; margin-right: 4px; font-size: 0.7em; vertical-align: 1px; }
+  .acct .live-dot .t { font-variant-numeric: tabular-nums; border-radius: 4px; padding: 0 3px; }
+  .acct .live-dot.flash .t { animation: tick 1.6s ease-out; }
+  @keyframes tick {
+    0%, 30%, 60% { background: var(--buy); color: var(--surface); }
+    15%, 45%, 75%, 100% { background: transparent; color: inherit; }
+  }
+  @media (prefers-reduced-motion: reduce) { .acct .live-dot.flash .t { animation: none; background: var(--line); } }
   .acct .tk { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 6px; }
   .acct .det { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; max-width: 360px; margin-top: -4px; color: var(--muted); font-size: 0.72rem; }
   .acct .det span { display: block; min-width: 0; }
@@ -468,7 +475,9 @@
     const tots = Object.entries(tot).map(([cur, t]) => `<span>${cur === 'KRW' ? '원화' : '달러'} 합계 <span class="mono">${money(t.value, cur)}</span>
       <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span></span>`).join('');
     const hm = iso => kst(iso).split(' ')[1];
-    const stamp = acctLive ? (acctOk ? `<span class="live-dot">실시간 ${hm(acctLive)}</span>` : `<span class="muted">연결 끊김 · ${hm(acctLive)} 데이터</span>`)
+    const hms = iso => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+    const flash = acctFlash; acctFlash = false;  // 새 데이터가 막 왔을 때만 시간이 깜박임 (다른 이유로 다시 그릴 땐 가만히)
+    const stamp = acctLive ? (acctOk ? `<span class="live-dot${flash ? ' flash' : ''}">실시간 <span class="t">${hms(acctLive)}</span></span>` : `<span class="muted">연결 끊김 · ${hm(acctLive)} 데이터</span>`)
       : (data && data.updatedAt ? `<span class="muted">${kst(data.updatedAt)} 기준</span>` : '');
     box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span> <span class="stamp">${stamp}</span></h2>${rows}<div class="tot">${tots}</div>`;
   }
@@ -706,8 +715,8 @@
   pollBook();
 
   // ---- 실시간 계좌: 봇 PC가 암호화해서 주는 /api/account 를 비밀번호를 푼 동안만 30초마다 받음 (실패하면 올려둔 데이터 그대로)
-  const ACCT_MS = 30000;
-  let acctTimer = null, acctLive = null, acctOk = false;  // acctLive = 마지막으로 실시간 갱신된 시각(ISO), acctOk = 지금 연결 중인지
+  const ACCT_MS = 31000;  // 봇 PC 캐시(30초)보다 살짝 길게 → 매번 새 데이터
+  let acctTimer = null, acctLive = null, acctOk = false, acctFlash = false;  // acctLive = 마지막으로 실시간 갱신된 시각(ISO), acctOk = 지금 연결 중인지
   async function pollAccount() {
     clearTimeout(acctTimer);
     if (!password || !secret || DEMO) return;
@@ -721,7 +730,7 @@
         if (password && secret) {
           secret.account = live.account;
           if (live.cash != null) secret.cash = live.cash;
-          acctLive = live.at; acctOk = true;
+          acctLive = live.at; acctOk = true; acctFlash = true;
           renderAccount(); renderSecret();
         }
       } catch (e) {
