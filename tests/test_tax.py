@@ -39,16 +39,28 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual(r["taxableKrw"], "1300000")
         self.assertEqual(r["taxKrw"], "286000")  # 22%
 
-    def test_moving_average_losses_and_fees(self):
+    def test_first_in_first_out_losses_and_fees(self):
         orders = [
             order("b1", "AAA", "BUY", 10, 100, "2026-03-01T10:00:00+09:00"),
             order("b2", "AAA", "BUY", 10, 120, "2026-03-01T11:00:00+09:00"),
             order("s", "AAA", "SELL", 5, 90, "2026-06-01T10:00:00+09:00", fee="1"),
         ]
         r = compute(orders, fx_of)
-        # 평단 110$ → 5주 매도: (5*90-1)*1400 - 5*110*1300 = 628,600 - 715,000
-        self.assertEqual(r["gainKrw"], "-86400")
-        self.assertEqual(r["bySymbol"], {"AAA": "-86400"})
+        # 먼저 산 100$ 5주를 판 것으로 계산: (5*90-1)*1400 - 5*100*1300 = 628,600 - 650,000
+        self.assertEqual(r["gainKrw"], "-21400")
+        self.assertEqual(r["bySymbol"], {"AAA": "-21400"})
+
+    def test_sell_spanning_two_lots(self):
+        orders = [
+            order("b1", "AAA", "BUY", 3, 100, "2026-03-01T10:00:00+09:00"),
+            order("b2", "AAA", "BUY", 3, 200, "2026-03-01T11:00:00+09:00"),
+            order("s1", "AAA", "SELL", 4, 150, "2026-06-01T10:00:00+09:00"),
+            order("s2", "AAA", "SELL", 2, 150, "2026-06-01T11:00:00+09:00"),
+        ]
+        r = compute(orders, fx_of)
+        # s1: 3주(100$)+1주(200$), s2: 남은 2주(200$)
+        self.assertEqual(r["gainKrw"], str(6 * 150 * 1400 - (3 * 100 + 3 * 200) * 1300))  # 1,260,000 - 1,170,000
+        self.assertEqual(r["unknown"], {})
 
     def test_sell_without_known_buy_is_left_out_and_counted(self):
         orders = [order("s", "OLD", "SELL", 5, 90, "2026-06-01T10:00:00+09:00")]

@@ -1,9 +1,9 @@
 """올해 해외주식 양도소득세 대략치.
 
 토스 Open API 에는 양도세 조회가 없어서, 올해 1월부터의 종료 주문(체결)으로 직접 근사한다.
-  원화 손익 = (매도가 × 매도일 환율) - (매수 평균단가 × 매수일 환율)   (수수료·세금은 필요경비로 뺌)
+  원화 손익 = (매도가 × 매도일 환율) - (산 가격 × 산 날 환율)   (수수료·세금은 필요경비로 뺌)
   양도세   = (올해 합계 - 기본공제 250만원) × 22%   (지방소득세 포함)
-평균단가는 이동평균으로 계산한다. 올해 이전에 산 물량을 판 건 평단을 몰라서 빼고, 몇 건인지 따로 알려준다.
+취득가는 선입선출(먼저 산 것부터 판 것으로 봄)로 계산한다. 올해 이전에 산 물량을 판 건 평단을 몰라서 빼고, 몇 건인지 따로 알려준다.
 신고용이 아니라 감을 잡는 용도다 (정확한 값은 증권사 앱의 양도세 조회로 확인).
   python -m laoer tax   -> 지금 다시 계산해서 보여줌
 """
@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import threading
+from collections import deque
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -77,26 +78,32 @@ def compute(orders: list[dict], fx_of) -> dict:
                 f["side"] = side
                 fills.append(f)
     fills.sort(key=lambda f: f["filledAt"] or "")
-    pos: dict[str, list[Decimal]] = {}  # 종목 -> [수량, 평균단가(원)]
+    lots: dict[str, deque] = {}  # 종목 -> 산 순서대로 [남은 수량, 주당 원화 취득가] (선입선출)
     by_symbol: dict[str, Decimal] = {}
     unknown: dict[str, int] = {}
     total = Decimal(0)
     for f in fills:
         fx = fx_of(f["filledAt"])
-        p = pos.setdefault(f["symbol"], [Decimal(0), Decimal(0)])
+        q = lots.setdefault(f["symbol"], deque())
         if f["side"] == "BUY":
-            cost = (f["qty"] * f["price"] + f["commission"]) * fx
-            q = p[0] + f["qty"]
-            p[1] = (p[0] * p[1] + cost) / q
-            p[0] = q
-        elif p[0] >= f["qty"] and p[0] > 0:
-            gain = (f["qty"] * f["price"] - f["commission"] - f["tax"]) * fx - f["qty"] * p[1]
-            p[0] -= f["qty"]
-            by_symbol[f["symbol"]] = by_symbol.get(f["symbol"], Decimal(0)) + gain
-            total += gain
-        else:  # 올해 이전에 산 물량이 섞여 있어 평단을 알 수 없다
+            q.append([f["qty"], (f["qty"] * f["price"] + f["commission"]) * fx / f["qty"]])
+            continue
+        if sum((lot[0] for lot in q), Decimal(0)) < f["qty"]:  # 올해 이전에 산 물량이 섞여 있어 취득가를 알 수 없다
             unknown[f["symbol"]] = unknown.get(f["symbol"], 0) + 1
-            p[0] = Decimal(0)
+            q.clear()
+            continue
+        cost, need = Decimal(0), f["qty"]
+        while need > 0:
+            lot = q[0]
+            take = min(lot[0], need)
+            cost += take * lot[1]
+            lot[0] -= take
+            need -= take
+            if lot[0] == 0:
+                q.popleft()
+        gain = (f["qty"] * f["price"] - f["commission"] - f["tax"]) * fx - cost
+        by_symbol[f["symbol"]] = by_symbol.get(f["symbol"], Decimal(0)) + gain
+        total += gain
     taxable = max(Decimal(0), total - DEDUCTION)
     return {
         "year": datetime.now(KST).year,
