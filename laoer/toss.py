@@ -287,6 +287,15 @@ class TossClient:
                 )
         return None
 
+    def holdings_all(self) -> dict:
+        """계좌 전체 보유 종목 원본 {items: [...], 요약...}. 대시보드 '계좌 전체' 칸용"""
+        try:
+            return self._call("GET", "/api/v1/holdings", account=True)["result"]
+        except TossError as e:
+            if e.status == 404:
+                return {"items": []}
+            raise
+
     def buying_power(self, currency: str = "USD") -> Decimal:
         r = self._call("GET", "/api/v1/buying-power", params={"currency": currency}, account=True)["result"]
         return Decimal(r["cashBuyingPower"])

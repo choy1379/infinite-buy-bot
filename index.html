@@ -178,6 +178,16 @@
   @media (max-width: 480px) { .quotes .at { display: none; } .quotes td, .quotes th { padding: 8px 3px; } .quotes table { font-size: 0.84rem; } }
   .src { margin: 6px 0 0; color: var(--muted); font-size: 0.8rem; }
 
+  .acct .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; }
+  .acct .row + .row { border-top: 1px solid var(--line); }
+  .acct .logo { width: 36px; height: 36px; border-radius: 50%; object-fit: contain; background: #fff; border: 1px solid var(--line); }
+  .acct .logo.txt { display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 0.72rem; letter-spacing: -0.02em; border: 0; overflow: hidden; }
+  .acct .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct .sub { color: var(--muted); font-size: 0.82rem; }
+  .acct .rt { text-align: right; white-space: nowrap; }
+  .acct .tot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding-top: 10px; margin-top: 4px; border-top: 2px solid var(--line); font-size: 0.9rem; }
+  .acct .bot { font-size: 0.7rem; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
+
   .empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px 20px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; display: grid; gap: 4px; }
   footer p { margin: 0; max-width: 65ch; }
@@ -214,6 +224,7 @@
     <p class="muted" id="lockmsg" style="margin:8px 0 0;font-size:0.85rem">보유 수량·평단·잔고·주문가는 비밀번호로 잠겨 있어요. 비밀번호는 이 브라우저 안에서만 쓰이고 어디로도 전송되지 않습니다.</p>
   </section>
   <section class="card" id="secret" hidden></section>
+  <section class="card acct" id="acct" hidden></section>
 
   <section id="next" hidden></section>
 
@@ -395,6 +406,45 @@
         <div><dt>누적 매도</dt><dd class="mono">${usd(c.sold)}</dd></div>
       </dl>`;
     el('relock').addEventListener('click', lockAgain);
+  }
+
+  // ---- 계좌 전체: 봇 종목 외 보유 종목까지 (잠금 해제 시). 로고는 공개 로고 이미지, 없으면 글자
+  const money = (v, cur) => num(v) === null ? '–' : cur === 'KRW'
+    ? `${num(v) < 0 ? '-' : ''}₩${Math.round(Math.abs(num(v))).toLocaleString('ko-KR')}` : usd(v);
+  const sgnMoney = (v, cur) => num(v) === null ? '–' : `${num(v) > 0 ? '+' : ''}${money(v, cur)}`;
+  function logo(it) {
+    const s = String(it.symbol || '');
+    const kr = it.market === 'KR' || it.currency === 'KRW' || /^\d{6}$/.test(s);
+    const src = kr ? `https://file.alphasquare.co.kr/media/images/stock_logo/kr/${encodeURIComponent(s)}.png`
+      : `https://financialmodelingprep.com/image-stock/${encodeURIComponent(s.toUpperCase())}.png`;
+    const txt = esc(kr ? (it.name || s).replace(/\s/g, '').slice(0, 2) : s.toUpperCase().slice(0, 4));
+    return `<img class="logo" src="${src}" alt="${txt}" loading="lazy" referrerpolicy="no-referrer"
+      onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: 'logo txt', textContent: this.alt }))">`;
+  }
+  function renderAccount() {
+    const box = el('acct'), items = secret && secret.account;
+    if (!items) { box.hidden = true; return; }
+    box.hidden = false;
+    if (!items.length) { box.innerHTML = '<h2>계좌 전체</h2><div class="err">보유 종목이 없어요.</div>'; return; }
+    const sorted = items.slice().sort((a, b) => (a.currency === b.currency ? 0 : a.currency === 'USD' ? -1 : 1) || (num(b.value) || 0) - (num(a.value) || 0));
+    const rows = sorted.map(it => {
+      const r = num(it.plRate), dr = num(it.dayRate);
+      const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
+      return `<div class="row">${logo(it)}
+        <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}${isBot ? '<span class="bot">봇</span>' : ''}</div>
+          <div class="sub mono">${esc(it.symbol)} · ${qty(it.qty)}주 · 평단 ${money(it.avg, it.currency)} · 현재 ${money(it.last, it.currency)}</div></div>
+        <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
+          <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
+          ${dr === null ? '' : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div></div>`;
+    }).join('');
+    const tot = {};
+    for (const it of items) {
+      const t = tot[it.currency || 'USD'] ||= { value: 0, purchase: 0, pl: 0 };
+      t.value += num(it.value) || 0; t.purchase += num(it.purchase) || 0; t.pl += num(it.pl) || 0;
+    }
+    const tots = Object.entries(tot).map(([cur, t]) => `<span>${cur === 'KRW' ? '원화' : '달러'} 합계 <span class="mono">${money(t.value, cur)}</span>
+      <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span></span>`).join('');
+    box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span></h2>${rows}<div class="tot">${tots}</div>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -792,6 +842,12 @@
         price: String(close), cash: (SEED - bought + sold).toFixed(2),
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
+        account: [
+          ...(qty ? [{ symbol: 'TECL', name: 'Direxion Daily Technology Bull 3X', market: 'US', currency: 'USD', qty: String(qty), avg: avg.toFixed(4), last: String(close),
+            purchase: (qty * avg).toFixed(2), value: (qty * close).toFixed(2), pl: (qty * (close - avg)).toFixed(2), plRate: String(close / avg - 1), dayRate: '0.0131' }] : []),
+          { symbol: 'KO', name: '코카콜라', market: 'US', currency: 'USD', qty: '120', avg: '72.40', last: '66.85', purchase: '8688.00', value: '8022.00', pl: '-666.00', plRate: '-0.0767', dayRate: '-0.0042' },
+          { symbol: '005930', name: '삼성전자', market: 'KR', currency: 'KRW', qty: '10', avg: '61200', last: '58900', purchase: '612000', value: '589000', pl: '-23000', plRate: '-0.0376', dayRate: '0.0068' },
+        ],
       },
     };
   }
@@ -799,7 +855,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderNext(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderNext(); renderDays(); renderHistory();
   }
 
   async function load() {

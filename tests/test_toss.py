@@ -143,6 +143,9 @@ class TossClientTest(unittest.TestCase):
         hold_call = [x for x in self.fake.calls if x[1] == "/api/v1/holdings"][0]
         self.assertEqual(hold_call[2]["X-Tossinvest-Account"], "7")
         self.assertEqual(hold_call[4]["symbol"], ["TECL"])
+        allh = c.holdings_all()
+        self.assertEqual(allh["items"][0]["symbol"], "TECL")
+        self.assertNotIn("symbol", [x for x in self.fake.calls if x[1] == "/api/v1/holdings"][-1][4])  # 전체 조회는 종목 필터 없음
 
     def test_token_cached_across_clients(self):
         self.client().price("TECL")
