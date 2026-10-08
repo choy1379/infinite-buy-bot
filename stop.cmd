@@ -1,5 +1,5 @@
 @echo off
 cd /d "%~dp0"
-if not exist state\bot.pid (echo Bot is not running. & exit /b 0)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$id = Get-Content '%~dp0state\bot.pid'; Get-CimInstance Win32_Process -Filter \"ParentProcessId=$id\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $id -Force -ErrorAction SilentlyContinue; 'Bot stopped (PID ' + $id + ')'"
-del state\bot.pid
+powershell -NoProfile -ExecutionPolicy Bypass -Command "function Kill-Tree($id) { Get-CimInstance Win32_Process -Filter \"ParentProcessId=$id\" | ForEach-Object { Kill-Tree $_.ProcessId }; Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }; $f = '%~dp0state\bot.pid'; if (Test-Path $f) { $id = [int](Get-Content $f); Kill-Tree $id; 'Bot stopped (PID ' + $id + ')' } else { 'Bot is not running.' }; $n = 0; Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" | Where-Object { $_.CommandLine -match '--url http://localhost:' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; if ($n) { 'Closed ' + $n + ' leftover tunnel(s)' }"
+if exist state\bot.pid del state\bot.pid
+exit /b 0
