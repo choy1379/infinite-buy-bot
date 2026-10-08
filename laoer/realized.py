@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 KST = timezone(timedelta(hours=9))
 CENT = Decimal("0.01")
 WON = Decimal("1")
+HISTORY_DAYS = 365  # 평단 계산용 과거 체결 조회 기간
 
 
 def _d(v) -> Decimal | None:
@@ -69,7 +70,11 @@ class RealizedLog:
 
 def normalize_sell(order: dict) -> dict | None:
     """종료된 주문 하나 → 체결된 매도면 정리한 dict, 아니면 None."""
-    if str(order.get("side") or "").upper() != "SELL":
+    return _normalize_fill(order, "SELL")
+
+
+def _normalize_fill(order: dict, side: str) -> dict | None:
+    if str(order.get("side") or "").upper() != side:
         return None
     ex = order.get("execution") or {}
     qty, price = _d(ex.get("filledQuantity")), _d(ex.get("averageFilledPrice"))
@@ -87,6 +92,32 @@ def normalize_sell(order: dict) -> dict | None:
         "tax": _d(ex.get("tax")) or Decimal(0),
         "filledAt": filled_at,
     }
+
+
+def derive_costs(orders: list[dict]) -> dict[str, Decimal]:
+    """과거 체결(매수·매도)을 시간순으로 따라가 '매도 직전 평균 매수가'를 구한다 (주문번호 -> 평단).
+    매수는 평단에 섞고 매도는 수량만 줄인다. 조회 기간 앞에서 산 물량이 있어 수량이 모자라면 평단을 모르는 걸로 둔다."""
+    fills = []
+    for o in orders:
+        f = _normalize_fill(o, "BUY") or _normalize_fill(o, "SELL")
+        if f:
+            f["side"] = str(o.get("side")).upper()
+            fills.append(f)
+    fills.sort(key=lambda f: f["filledAt"] or "")
+    held: dict[str, list] = {}  # 종목 -> [수량, 평단]
+    out: dict[str, Decimal] = {}
+    for f in fills:
+        pos = held.setdefault(f["symbol"], [Decimal(0), Decimal(0)])
+        if f["side"] == "BUY":
+            total = pos[0] + f["qty"]
+            pos[1] = (pos[0] * pos[1] + f["qty"] * f["price"]) / total
+            pos[0] = total
+        elif pos[0] >= f["qty"] and pos[0] > 0:
+            out[f["orderId"]] = pos[1]
+            pos[0] -= f["qty"]
+        else:
+            pos[0] = Decimal(0)  # 기간 밖 매수분이 섞여 있어 평단을 알 수 없다
+    return out
 
 
 def _kst_date(iso: str | None) -> str | None:
@@ -127,6 +158,14 @@ def build_record(sell: dict, cost: Decimal | None, fx: Decimal | None, name: str
     }
 
 
+def _rec_to_sell(rec: dict) -> dict:
+    return {
+        "orderId": rec["orderId"], "symbol": rec["symbol"], "currency": rec["currency"],
+        "qty": _d(rec["qty"]), "price": _d(rec["price"]), "commission": _d(rec["commission"]) or Decimal(0),
+        "tax": _d(rec["tax"]) or Decimal(0), "filledAt": rec["filledAt"],
+    }
+
+
 def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int = 14, now: datetime | None = None) -> list[dict]:
     """최근 days일의 종료 주문에서 아직 기록 안 한 체결 매도를 찾아 기록한다. 봇 종목(skip_symbol)은 봇 쪽 기록이 따로 있어 뺀다."""
     now = now or datetime.now(KST)
@@ -144,7 +183,21 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
             if avg is not None and qty and qty > 0:
                 rlog.costs[sym] = _s(avg)  # 팔아도 평균 매수가는 안 변하니, 다 팔기 전 마지막 값을 남겨 둔다
     new = []
-    for order in toss.closed_orders(start=start):
+    recent = toss.closed_orders(start=start)
+    fresh = [s for s in map(normalize_sell, recent) if s and s["symbol"] != skip_symbol and s["orderId"] not in rlog.sells]
+    unknown = [r for r in rlog.sells.values() if r.get("cost") is None]
+    derived: dict[str, Decimal] = {}
+    if any(rlog.costs.get(s["symbol"]) is None for s in fresh) or unknown:
+        try:  # 이미 다 판 종목은 보유 목록에 평단이 없으니, 과거 매수 체결로 계산한다
+            derived = derive_costs(toss.closed_orders(start=(now.astimezone(KST) - timedelta(days=HISTORY_DAYS)).date().isoformat()))
+        except Exception as e:
+            log.warning("실현손익: 과거 매수 조회 실패: %s", e)
+    for rec in unknown:  # 예전에 평단 없이 기록한 매도 보충
+        cost = derived.get(rec["orderId"])
+        if cost is not None:
+            fixed = build_record(_rec_to_sell(rec), cost, _d(rec.get("fx")), rec.get("name"))
+            rlog.sells[rec["orderId"]] = fixed
+    for order in recent:
         sell = normalize_sell(order)
         if not sell or sell["symbol"] == skip_symbol or sell["orderId"] in rlog.sells:
             continue
@@ -154,10 +207,13 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
                 fx = toss.exchange_rate(sell["filledAt"])
             except Exception as e:
                 log.warning("실현손익: 환율 조회 실패(%s): %s", sell["symbol"], e)
-        rec = build_record(sell, _d(rlog.costs.get(sell["symbol"])), fx, names.get(sell["symbol"]))
+        cost = _d(rlog.costs.get(sell["symbol"]))
+        if cost is None:
+            cost = derived.get(sell["orderId"])
+        rec = build_record(sell, cost, fx, names.get(sell["symbol"]))
         rlog.sells[sell["orderId"]] = rec
         new.append(rec)
-    if new or held:
+    if new or held or unknown:
         rlog.save()
     return new
 
