@@ -146,5 +146,43 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.get("/state.json")[0], 404)
 
 
+class StartLiveTest(unittest.TestCase):
+    """봇이 `run` 으로 돌 때 호가 서버가 실제로 떠서 요청에 답하는지 (예전엔 만들기만 하고 시작을 안 했다)."""
+
+    def make(self):
+        from types import SimpleNamespace
+
+        cfg = SimpleNamespace(
+            symbol="TECL", dashboard=None,
+            live=SimpleNamespace(host="127.0.0.1", port=0, tunnel=False),
+        )
+        return cfg, SimpleNamespace(toss=FakeToss())
+
+    def test_run_path_serves_requests(self):
+        from laoer.__main__ import start_live
+
+        cfg, bot = self.make()
+        srv = start_live(cfg, bot, port=_free_port())
+        self.addCleanup(srv.close)
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.port}/api/orderbook", timeout=5) as r:
+            self.assertEqual(r.status, 200)
+
+    def test_live_command_path_does_not_start_thread(self):
+        from laoer.__main__ import start_live
+
+        cfg, bot = self.make()
+        srv = start_live(cfg, bot, port=_free_port(), serve=False)
+        self.addCleanup(srv.httpd.server_close)
+        self.assertNotIn("live-server", [t.name for t in threading.enumerate()])
+
+
+def _free_port():
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 if __name__ == "__main__":
     unittest.main()
