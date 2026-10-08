@@ -506,7 +506,7 @@
       <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`;
   }
 
-  // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 이동평균으로 계산, 기본공제 250만원, 22%
+  // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
   function renderTax() {
     const box = el('tax'), t = secret && secret.tax;
     if (!t) { box.hidden = true; return; }
@@ -522,7 +522,7 @@
       <div class="rrow"><div>기본공제</div><div class="rt mono">${won(t.deductionKrw)}</div></div>
       <div class="rrow"><div>과세 대상</div><div class="rt mono">${won(t.taxableKrw)}</div></div>
       <div class="rrow"><div><b>예상 양도세</b> <span class="muted">22%</span></div><div class="rt mono"><b>${won(t.taxKrw)}</b></div></div>
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 체결을 이동평균과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요. 보유 종목은 팔기 전까지 반영되지 않아요.</p>`;
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 체결을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요. 보유 종목은 팔기 전까지 반영되지 않아요.</p>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
