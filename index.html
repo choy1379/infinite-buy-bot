@@ -248,6 +248,7 @@
   <section class="card" id="secret" hidden></section>
   <section class="card acct" id="acct" hidden></section>
   <section class="card acct real" id="realized" hidden></section>
+  <section class="card acct real" id="tax" hidden></section>
 
   <section id="next" hidden></section>
 
@@ -503,6 +504,25 @@
       <span class="mono ${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span></span>`;
     box.innerHTML = `<h2>실현 손익 기록 <span class="muted" style="font-weight:400;font-size:0.85rem">봇 밖에서 판 내역</span></h2>${rows}<div class="tot">${tot}</div>
       <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`;
+  }
+
+  // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 이동평균으로 계산, 기본공제 250만원, 22%
+  function renderTax() {
+    const box = el('tax'), t = secret && secret.tax;
+    if (!t) { box.hidden = true; return; }
+    box.hidden = false;
+    const won = v => num(v) === null ? '–' : (num(v) < 0 ? '-' : '') + '₩' + Math.abs(Math.round(num(v))).toLocaleString('ko-KR');
+    const wonS = v => num(v) === null ? '–' : (num(v) > 0 ? '+' : '') + won(v);
+    const rows = Object.entries(t.bySymbol || {}).map(([sym, v]) =>
+      `<div class="rrow"><div class="nm">${esc(sym)}</div><div class="rt mono ${sign(v)}">${wonS(v)}</div></div>`).join('');
+    const unk = Object.entries(t.unknown || {}).map(([s, n]) => `${esc(s)} ${n}건`).join(', ');
+    box.innerHTML = `<h2>${esc(t.year)}년 양도소득세 <span class="muted" style="font-weight:400;font-size:0.85rem">대략치</span></h2>
+      <div class="rrow"><div>올해 양도차익</div><div class="rt mono ${sign(t.gainKrw)}">${wonS(t.gainKrw)}</div></div>
+      ${rows}
+      <div class="rrow"><div>기본공제</div><div class="rt mono">${won(t.deductionKrw)}</div></div>
+      <div class="rrow"><div>과세 대상</div><div class="rt mono">${won(t.taxableKrw)}</div></div>
+      <div class="rrow"><div><b>예상 양도세</b> <span class="muted">22%</span></div><div class="rt mono"><b>${won(t.taxKrw)}</b></div></div>
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 체결을 이동평균과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요. 보유 종목은 팔기 전까지 반영되지 않아요.</p>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -944,6 +964,7 @@
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
         realized: { items: [{ symbol: 'KO', name: '코카콜라', currency: 'USD', date: '2026-10-08', qty: '120', price: '87.00', cost: '87.74', plUsd: '-89.40', plKrw: '-124000', fx: '1388.5' }], totalUsd: '-89.40', totalKrw: '-124000' },
+        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 } },
         account: [
           ...(qty ? [{ symbol: 'TECL', name: 'Direxion Daily Technology Bull 3X', market: 'US', currency: 'USD', qty: String(qty), avg: avg.toFixed(4), last: String(close),
             purchase: (qty * avg).toFixed(2), value: (qty * close).toFixed(2), pl: (qty * (close - avg)).toFixed(2), plRate: String(close / avg - 1), dayRate: '0.0131' }] : []),
@@ -957,7 +978,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderNext(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderDays(); renderHistory();
   }
 
   async function load() {
