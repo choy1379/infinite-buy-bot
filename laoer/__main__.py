@@ -51,7 +51,7 @@ def kakao_token_path(cfg: Config) -> Path:
 
 
 CLAUDE_NAME = "Claude"  # `notify` 로 보내는 글의 보낸 이름 (봇 자동 알림은 설정의 이름 그대로)
-CLAUDE_AVATAR = "https://choy1379.github.io/infinite-buy-bot/assets/claude-avatar.png"  # 같은 글의 디스코드 프로필 사진 (이 저장소의 assets/)
+CLAUDE_AVATAR = "https://choy1379.github.io/infinite-buy-bot/assets/claude-avatar.png?v=2"  # 같은 글의 디스코드 프로필 사진 (이 저장소의 assets/, ?v= 는 디스코드가 못 불러온 결과를 캐시했을 때 새로 받게 하는 번호)
 
 
 def build_notifier(cfg: Config, *, username: str | None = None, avatar_url: str | None = None) -> Notifier:
