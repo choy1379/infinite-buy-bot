@@ -61,15 +61,18 @@ def _post_form(opener, url: str, form: dict, headers: dict | None = None):
 class DiscordNotifier:
     name = "discord"
 
-    def __init__(self, webhook_url: str, *, username: str = "TECL 무매봇", opener=None, sleep=time.sleep):
+    def __init__(self, webhook_url: str, *, username: str = "TECL 무매봇", avatar_url: str | None = None, opener=None, sleep=time.sleep):
         self.webhook_url = webhook_url
         self.username = username
+        self.avatar_url = avatar_url  # 없으면 웹훅에 설정된 기본 프로필 사진
         self._opener = opener or urllib.request.build_opener()
         self._sleep = sleep
 
     def payload(self, msg: Message) -> dict:
+        extra = {"avatar_url": self.avatar_url} if self.avatar_url else {}
         return {
             "username": self.username,
+            **extra,
             "embeds": [
                 {
                     "title": msg.title[:256],

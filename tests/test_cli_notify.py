@@ -37,17 +37,18 @@ class NotifyCommandTest(unittest.TestCase):
             cfg.write_text(CONFIG, encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 for argv in (["notify", "hi"],):
-                    with mock.patch.object(cli, "DiscordNotifier", side_effect=lambda url, username, **kw: seen.append(username) or Channel()):
+                    with mock.patch.object(cli, "DiscordNotifier", side_effect=lambda url, username, avatar_url=None, **kw: seen.append((username, avatar_url)) or Channel()):
                         cli.main(["--config", str(cfg), *argv])
-        self.assertEqual(seen, ["Claude"])
+        self.assertEqual(seen, [("Claude", cli.CLAUDE_AVATAR)])
         from laoer.config import load_config
 
         with tempfile.TemporaryDirectory() as d:
             cfg = Path(d) / "config.toml"
             cfg.write_text(CONFIG, encoding="utf-8")
-            with mock.patch.object(cli, "DiscordNotifier", side_effect=lambda url, username, **kw: seen.append(username) or Channel()):
+            with mock.patch.object(cli, "DiscordNotifier", side_effect=lambda url, username, avatar_url=None, **kw: seen.append((username, avatar_url)) or Channel()):
                 cli.build_notifier(load_config(cfg, require_toss=False))
-        self.assertNotEqual(seen[-1], "Claude")  # 봇 자동 알림은 설정의 이름(기본 TECL 무매봇) 그대로
+        self.assertNotEqual(seen[-1][0], "Claude")  # 봇 자동 알림은 설정의 이름(기본 TECL 무매봇) 그대로
+        self.assertIsNone(seen[-1][1])  # 프로필 사진도 웹훅 기본값 그대로
 
     def run_cli(self, argv, channels):
         with tempfile.TemporaryDirectory() as d:
