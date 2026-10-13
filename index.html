@@ -507,22 +507,43 @@
   }
 
   // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
+  //      + 보유 중인 달러 종목의 원화 실손익: 지금 평가액 × 지금 환율 − 매수일 환율로 산 원화 취득가 (환차손익 포함)
+  function holdKrw(t) {
+    const fx = num(secret.fx), open = t.open || {};
+    if (fx === null) return null;
+    let cost = 0, value = 0, costUsd = 0, valueUsd = 0, names = [], skipped = [];
+    for (const it of secret.account || []) {
+      if ((it.currency || 'USD') !== 'USD' || !(num(it.qty) > 0)) continue;
+      const o = open[it.symbol], q = num(it.qty);
+      if (!o || num(o.qty) + 1e-9 < q) { skipped.push(it.symbol); continue; }  // 올해 전에 산 물량이 있어 원화 취득가를 모름
+      const k = q / num(o.qty);  // 토스 보유 수량만큼만 (먼저 산 것부터 팔렸다고 보고 평균으로 나눔)
+      cost += num(o.costKrw) * k; costUsd += num(o.costUsd) * k;
+      valueUsd += num(it.value) || 0; names.push(it.symbol);
+    }
+    if (!names.length) return { skipped };
+    value = valueUsd * fx;
+    return { names, skipped, cost, value, pl: value - cost, rate: (value - cost) / cost, fxPl: costUsd * fx - cost, usdRate: valueUsd / costUsd - 1, fx };
+  }
   function renderTax() {
     const box = el('tax'), t = secret && secret.tax;
     if (!t) { box.hidden = true; return; }
     box.hidden = false;
     const won = v => num(v) === null ? '–' : (num(v) < 0 ? '-' : '') + '₩' + Math.abs(Math.round(num(v))).toLocaleString('ko-KR');
     const wonS = v => num(v) === null ? '–' : (num(v) > 0 ? '+' : '') + won(v);
-    const rows = Object.entries(t.bySymbol || {}).map(([sym, v]) =>
-      `<div class="rrow"><div class="nm">${esc(sym)}</div><div class="rt mono ${sign(v)}">${wonS(v)}</div></div>`).join('');
     const unk = Object.entries(t.unknown || {}).map(([s, n]) => `${esc(s)} ${n}건`).join(', ');
+    const h = holdKrw(t);
+    const hold = h && h.names ? `
+      <div class="rrow"><div>보유 중 원화 손익 <span class="muted">${esc(h.names.join(', '))}</span></div><div class="rt mono ${sign(h.pl)}">${wonS(h.pl)}</div></div>
+      <div class="rrow"><div><b>실손익률</b> <span class="muted">환율 포함</span></div><div class="rt mono ${sign(h.rate)}"><b>${pct(h.rate)}</b></div></div>
+      <div class="rrow"><div class="muted">└ 환율 영향 <span class="muted">· 달러 기준 ${pct(h.usdRate)}</span></div><div class="rt mono ${sign(h.fxPl)}">${wonS(h.fxPl)}</div></div>
+      <div class="rrow"><div>판 것 + 보유 합계</div><div class="rt mono ${sign(num(t.gainKrw) + h.pl)}">${wonS(num(t.gainKrw) + h.pl)}</div></div>` : '';
+    const note = h && h.names ? ` 보유 중 손익은 지금 평가액 × 지금 환율(₩${Math.round(h.fx * 100) / 100}) − 산 날 환율로 계산한 원화 매수금이라 환차손익이 들어가 있고, 아직 안 팔아서 세금엔 안 들어가요.${h.skipped.length ? ` 올해 전에 산 물량이 있어 뺀 종목: ${esc(h.skipped.join(', '))}.` : ''}` : '';
     box.innerHTML = `<h2>${esc(t.year)}년 양도소득세 <span class="muted" style="font-weight:400;font-size:0.85rem">대략치</span></h2>
-      <div class="rrow"><div>올해 양도차익</div><div class="rt mono ${sign(t.gainKrw)}">${wonS(t.gainKrw)}</div></div>
-      ${rows}
+      <div class="rrow"><div>올해 양도차익 <span class="muted">판 것</span></div><div class="rt mono ${sign(t.gainKrw)}">${wonS(t.gainKrw)}</div></div>${hold}
       <div class="rrow"><div>기본공제</div><div class="rt mono">${won(t.deductionKrw)}</div></div>
       <div class="rrow"><div>과세 대상</div><div class="rt mono">${won(t.taxableKrw)}</div></div>
       <div class="rrow"><div><b>예상 양도세</b> <span class="muted">22%</span></div><div class="rt mono"><b>${won(t.taxKrw)}</b></div></div>
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 체결을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요. 보유 종목은 팔기 전까지 반영되지 않아요.</p>`;
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">양도차익은 올해 판 것을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''}${note} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요.</p>`;
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -773,8 +794,9 @@
         if (password && secret) {
           secret.account = live.account;
           if (live.cash != null) secret.cash = live.cash;
+          if (live.fx != null) secret.fx = live.fx;
           acctLive = live.at; acctOk = true; acctFlash = true;
-          renderAccount(); renderSecret();
+          renderAccount(); renderSecret(); renderTax();
         }
       } catch (e) {
         if (acctLive && acctOk) { acctOk = false; renderAccount(); }   // 끊기면 마지막 실시간 데이터라고 표시
@@ -964,7 +986,8 @@
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
         realized: { items: [{ symbol: 'KO', name: '코카콜라', currency: 'USD', date: '2026-10-08', qty: '120', price: '87.00', cost: '87.74', plUsd: '-89.40', plKrw: '-124000', fx: '1388.5' }], totalUsd: '-89.40', totalKrw: '-124000' },
-        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 } },
+        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 }, open: qty ? { TECL: { qty: String(qty), costKrw: String(Math.round(qty * avg * 1395)), costUsd: (qty * avg).toFixed(2) } } : {} },
+        fx: '1380',
         account: [
           ...(qty ? [{ symbol: 'TECL', name: 'Direxion Daily Technology Bull 3X', market: 'US', currency: 'USD', qty: String(qty), avg: avg.toFixed(4), last: String(close),
             purchase: (qty * avg).toFixed(2), value: (qty * close).toFixed(2), pl: (qty * (close - avg)).toFixed(2), plRate: String(close / avg - 1), dayRate: '0.0131' }] : []),

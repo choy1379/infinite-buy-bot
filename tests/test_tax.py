@@ -62,6 +62,16 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual(r["gainKrw"], str(6 * 150 * 1400 - (3 * 100 + 3 * 200) * 1300))  # 1,260,000 - 1,170,000
         self.assertEqual(r["unknown"], {})
 
+    def test_unsold_lots_keep_krw_and_usd_cost(self):
+        orders = [
+            order("b1", "AAA", "BUY", 10, 100, "2026-03-01T10:00:00+09:00", fee="1"),
+            order("b2", "AAA", "BUY", 10, 120, "2026-06-01T10:00:00+09:00"),
+            order("s", "AAA", "SELL", 12, 130, "2026-06-01T11:00:00+09:00"),
+        ]
+        r = compute(orders, fx_of)
+        # 남은 건 두 번째로 산 8주 (120$, 1400원)
+        self.assertEqual(r["open"], {"AAA": {"qty": "8", "costKrw": str(8 * 120 * 1400), "costUsd": "960.00"}})
+
     def test_sell_without_known_buy_is_left_out_and_counted(self):
         orders = [order("s", "OLD", "SELL", 5, 90, "2026-06-01T10:00:00+09:00")]
         r = compute(orders, fx_of)
