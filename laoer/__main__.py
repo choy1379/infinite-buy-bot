@@ -1,4 +1,4 @@
-"""CLI: python -m laoer {run|live|market|plan|order|report|status|dashboard|notify-test|kakao-login}"""
+"""CLI: python -m laoer {run|live|market|plan|order|report|status|dashboard|notify|notify-test|kakao-login}"""
 
 from __future__ import annotations
 
@@ -130,6 +130,22 @@ def cmd_kakao_login(cfg: Config) -> int:
     return 0
 
 
+def cmd_notify(cfg: Config, text: str) -> int:
+    """디스코드 웹훅으로 임의 메시지를 보낸다. 첫 줄은 제목, 나머지는 본문."""
+    if not cfg.discord:
+        print("config.toml 의 [notify.discord] webhook_url 이 비어 있습니다.", file=sys.stderr)
+        return 1
+    lines = text.replace("\\n", "\n").strip().split("\n")
+    msg = Message(lines[0] or "🔔 알림", lines[1:], "warn")
+    try:
+        DiscordNotifier(cfg.discord.webhook_url, username=cfg.discord.username).send(msg)
+    except (NotifyError, OSError) as e:
+        print(f"디스코드 전송 실패: {e}", file=sys.stderr)
+        return 1
+    print("디스코드로 보냈습니다.")
+    return 0
+
+
 def cmd_market() -> int:
     rows = Market().snapshot()["rows"]
     for r in rows:
@@ -205,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("status", help="보유/T값/사이클 상태")
     p.add_argument("--notify", action="store_true", help="상태를 알림으로도 보냄")
     sub.add_parser("dashboard", help="모니터링 페이지 데이터를 지금 갱신")
+    p = sub.add_parser("notify", help="디스코드로 메시지 보내기 (첫 줄 제목, \\n 으로 줄바꿈)")
+    p.add_argument("text", help="보낼 문장")
     sub.add_parser("notify-test", help="디스코드/카톡 테스트 메시지")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
@@ -224,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_market()
 
     try:
-        cfg = load_config(args.config, require_toss=args.cmd not in ("notify-test", "kakao-login"))
+        cfg = load_config(args.config, require_toss=args.cmd not in ("notify", "notify-test", "kakao-login"))
     except ConfigError as e:
         print(f"설정 오류: {e}", file=sys.stderr)
         return 2
@@ -232,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "kakao-login":
         return cmd_kakao_login(cfg)
+    if args.cmd == "notify":
+        return cmd_notify(cfg, args.text)
     if args.cmd == "notify-test":
         notifier = build_notifier(cfg)
         notifier.send(Message("🔔 무매봇 알림 테스트", [f"{cfg.symbol} 봇 알림이 정상적으로 연결됐습니다."], "success"))
