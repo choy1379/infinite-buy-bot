@@ -1,4 +1,4 @@
-"""CLI: python -m laoer {run|live|market|plan|order|report|status|dashboard|notify-test|kakao-login}"""
+"""CLI: python -m laoer {run|live|market|plan|order|report|status|dashboard|notify|notify-test|kakao-login}"""
 
 from __future__ import annotations
 
@@ -206,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--notify", action="store_true", help="상태를 알림으로도 보냄")
     sub.add_parser("dashboard", help="모니터링 페이지 데이터를 지금 갱신")
     sub.add_parser("notify-test", help="디스코드/카톡 테스트 메시지")
+    p = sub.add_parser("notify", help="설정된 알림 채널로 문구를 그대로 보냄 (예: 승인 필요)")
+    p.add_argument("text", nargs="+", help="보낼 문구 (첫 줄이 제목, 여러 단어는 따옴표로 묶기)")
+    p.add_argument("--level", choices=["info", "success", "warn", "error"], default="info")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
     p = sub.add_parser("realized", help="봇 밖에서 판 종목의 실현 손익을 기록하고 보여줌")
@@ -224,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_market()
 
     try:
-        cfg = load_config(args.config, require_toss=args.cmd not in ("notify-test", "kakao-login"))
+        cfg = load_config(args.config, require_toss=args.cmd not in ("notify", "notify-test", "kakao-login"))
     except ConfigError as e:
         print(f"설정 오류: {e}", file=sys.stderr)
         return 2
@@ -235,6 +238,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "notify-test":
         notifier = build_notifier(cfg)
         notifier.send(Message("🔔 무매봇 알림 테스트", [f"{cfg.symbol} 봇 알림이 정상적으로 연결됐습니다."], "success"))
+        return 0 if notifier.channels else 1
+
+    if args.cmd == "notify":
+        notifier = build_notifier(cfg)  # 웹훅 주소 같은 설정값은 출력하지 않는다
+        lines = " ".join(args.text)[:1500].splitlines() or [""]
+        notifier.send(Message(lines[0], lines[1:], args.level))
         return 0 if notifier.channels else 1
 
     bot = build_bot(cfg)
