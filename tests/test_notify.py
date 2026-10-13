@@ -53,6 +53,12 @@ class DiscordTest(unittest.TestCase):
         self.assertEqual(body["embeds"][0]["title"], "제목")
         self.assertEqual(body["embeds"][0]["description"], "한 줄")
         self.assertIn("tecl-infinite-buy", req.get_header("User-agent"))
+        self.assertNotIn("avatar_url", body)  # 지정하지 않으면 웹훅 기본 프로필 사진
+
+    def test_avatar_url_only_when_given(self):
+        opener = RecordingOpener(lambda req: FakeResp(204))
+        DiscordNotifier("https://discord.example/hook", avatar_url="https://x.example/a.png", opener=opener).send(Message("제목"))
+        self.assertEqual(json.loads(opener.requests[0].data)["avatar_url"], "https://x.example/a.png")
 
 
 class KakaoTest(unittest.TestCase):
