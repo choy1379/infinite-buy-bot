@@ -50,10 +50,13 @@ def kakao_token_path(cfg: Config) -> Path:
     return cfg.run.state_dir / "kakao_token.json"
 
 
-def build_notifier(cfg: Config) -> Notifier:
+CLAUDE_NAME = "Claude"  # `notify` 로 보내는 글의 보낸 이름 (봇 자동 알림은 설정의 이름 그대로)
+
+
+def build_notifier(cfg: Config, *, username: str | None = None) -> Notifier:
     channels = []
     if cfg.discord:
-        channels.append(DiscordNotifier(cfg.discord.webhook_url, username=cfg.discord.username))
+        channels.append(DiscordNotifier(cfg.discord.webhook_url, username=username or cfg.discord.username))
     if cfg.kakao:
         channels.append(
             KakaoNotifier(
@@ -241,9 +244,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if notifier.channels else 1
 
     if args.cmd == "notify":
-        notifier = build_notifier(cfg)  # 웹훅 주소 같은 설정값은 출력하지 않는다
+        notifier = build_notifier(cfg, username=CLAUDE_NAME)  # 웹훅 주소 같은 설정값은 출력하지 않는다
         lines = " ".join(args.text)[:1500].splitlines() or [""]
-        notifier.send(Message(lines[0], lines[1:], args.level))
+        notifier.send(Message(f"[{CLAUDE_NAME}] {lines[0]}", lines[1:], args.level))  # 봇 자동 알림과 구분(카톡은 이름을 못 바꿔 제목 머리말로)
         return 0 if notifier.channels else 1
 
     bot = build_bot(cfg)
