@@ -5,6 +5,7 @@
   양도세   = (올해 합계 - 기본공제 250만원) × 22%   (지방소득세 포함)
 취득가는 선입선출(먼저 산 것부터 판 것으로 봄)로 계산한다. 올해 이전에 산 물량을 판 건 평단을 몰라서 빼고, 몇 건인지 따로 알려준다.
 신고용이 아니라 감을 잡는 용도다 (정확한 값은 증권사 앱의 양도세 조회로 확인).
+아직 안 판 물량의 원화 취득가(매수일 환율)도 남겨서, 대시보드가 지금 환율로 보유 종목의 원화 실손익(환차손 포함)을 보여준다.
   python -m laoer tax   -> 지금 다시 계산해서 보여줌
 """
 
@@ -49,7 +50,7 @@ class TaxLog:
 
     def stale(self, now: datetime) -> bool:
         at = self.data.get("at")
-        if not at or not self.data.get("result"):
+        if not at or not self.data.get("result") or "open" not in self.data["result"]:  # 예전 형식이면 바로 다시 계산
             return True
         return now - datetime.fromisoformat(at) >= MAX_AGE
 
@@ -86,7 +87,8 @@ def compute(orders: list[dict], fx_of) -> dict:
         fx = fx_of(f["filledAt"])
         q = lots.setdefault(f["symbol"], deque())
         if f["side"] == "BUY":
-            q.append([f["qty"], (f["qty"] * f["price"] + f["commission"]) * fx / f["qty"]])
+            usd = f["qty"] * f["price"] + f["commission"]
+            q.append([f["qty"], usd * fx / f["qty"], usd / f["qty"]])
             continue
         if sum((lot[0] for lot in q), Decimal(0)) < f["qty"]:  # 올해 이전에 산 물량이 섞여 있어 취득가를 알 수 없다
             unknown[f["symbol"]] = unknown.get(f["symbol"], 0) + 1
@@ -105,6 +107,15 @@ def compute(orders: list[dict], fx_of) -> dict:
         by_symbol[f["symbol"]] = by_symbol.get(f["symbol"], Decimal(0)) + gain
         total += gain
     taxable = max(Decimal(0), total - DEDUCTION)
+    open_ = {}  # 아직 안 판 물량의 원화·달러 취득가 (보유 종목 원화 실손익 계산용)
+    for sym, q in sorted(lots.items()):
+        n = sum((lot[0] for lot in q), Decimal(0))
+        if n > 0:
+            open_[sym] = {
+                "qty": str(n),
+                "costKrw": str(sum((lot[0] * lot[1] for lot in q), Decimal(0)).quantize(WON, rounding=ROUND_HALF_UP)),
+                "costUsd": str(sum((lot[0] * lot[2] for lot in q), Decimal(0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            }
     return {
         "year": datetime.now(KST).year,
         "gainKrw": str(total.quantize(WON, rounding=ROUND_HALF_UP)),
@@ -113,6 +124,7 @@ def compute(orders: list[dict], fx_of) -> dict:
         "taxKrw": str((taxable * RATE).quantize(WON, rounding=ROUND_HALF_UP)),
         "bySymbol": {s: str(v.quantize(WON, rounding=ROUND_HALF_UP)) for s, v in sorted(by_symbol.items())},
         "unknown": unknown,
+        "open": open_,
     }
 
 
