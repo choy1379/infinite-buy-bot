@@ -165,6 +165,11 @@
   main.wide { max-width: 1200px; }
   .panel { display: grid; gap: 20px; min-width: 0; }
   .panel[hidden] { display: none; }
+  .cols, .col { display: grid; gap: 20px; min-width: 0; align-content: start; }
+  @media (min-width: 1000px) {
+    main { max-width: 1200px; }
+    .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  }
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
   .tabs button { background: transparent; color: var(--muted); border-radius: 8px 8px 0 0; padding: 8px 16px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
   .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
@@ -229,6 +234,8 @@
   <div class="fx mono" id="fx" aria-label="실시간 환율" hidden></div>
   <div id="notice"></div>
 
+  <div class="cols">
+  <div class="col">
   <section class="stats" id="stats" aria-label="핵심 지표"></section>
 
   <details class="fold" id="book-fold" open hidden>
@@ -249,7 +256,9 @@
   <section class="card acct" id="acct" hidden></section>
   <section class="card acct real" id="realized" hidden></section>
   <section class="card acct real" id="tax" hidden></section>
+  </div>
 
+  <div class="col">
   <section id="next" hidden></section>
 
   <section>
@@ -261,6 +270,8 @@
     <h2>완료한 사이클</h2>
     <div id="history"></div>
   </section>
+  </div>
+  </div>
 
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
