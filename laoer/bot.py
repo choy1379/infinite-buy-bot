@@ -642,6 +642,12 @@ class Bot:
         except Exception as e:  # 대시보드 실패가 매매를 멈추면 안 된다
             log.warning("대시보드 갱신 실패: %s", e)
 
+    def _refresh_account(self) -> None:
+        try:
+            self.dashboard.refresh_account(self)
+        except Exception as e:  # 대시보드 실패가 매매를 멈추면 안 된다
+            log.warning("계좌 전체 갱신 실패: %s", e)
+
     def _notify_error(self, err: Exception) -> None:
         key = str(err)[:200]
         now = self.clock()
@@ -673,12 +679,16 @@ class Bot:
                     self.last_error = self.last_error_at = None
                     if self.dashboard and self.dashboard.due(self.clock()):
                         self._publish("heartbeat")
+                    elif self.dashboard and self.dashboard.account_due(self.clock()):
+                        self._refresh_account()
                 except Exception as e:  # 네트워크/API 오류로 봇이 죽지 않게
                     log.exception("tick 실패")
                     self._notify_error(e)
                     wait = 300
                 finally:
                     keep_awake(False)
+                if self.dashboard and self.dashboard.account_minutes > 0:  # 계좌 전체 확인 간격보다 오래 자지 않음
+                    wait = min(wait, self.dashboard.account_minutes * 60)
                 wait = min(max(wait, 30.0), 1800.0)
                 log.info("다음 확인까지 %.0f초 대기", wait)
                 self.sleep(wait)

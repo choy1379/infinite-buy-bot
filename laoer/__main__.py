@@ -84,7 +84,7 @@ def build_bot(cfg: Config) -> Bot:
     bot.fx_rate = lambda: Market().quote("yahoo", "KRW=X")["price"]
     if cfg.dashboard:
         d = cfg.dashboard
-        bot.dashboard = Dashboard(GitHubPublisher(d.github_token, d.repo, d.branch), d.password, d.heartbeat_minutes)
+        bot.dashboard = Dashboard(GitHubPublisher(d.github_token, d.repo, d.branch), d.password, d.heartbeat_minutes, d.account_minutes)
     return bot
 
 

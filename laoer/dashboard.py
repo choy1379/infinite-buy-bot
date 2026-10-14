@@ -291,7 +291,7 @@ def build_payload(
 
 # --------------------------------------------------------------- publisher
 class GitHubPublisher:
-    """GitHub Contents API 로 한 파일을 브랜치에 덮어쓴다 (git 설치 불필요)."""
+    """GitHub Git Data API 로 한 파일을 브랜치에 덮어쓴다 (git 설치 불필요)."""
 
     def __init__(self, token: str, repo: str, branch: str, path: str = "dashboard.json", *, opener=None, timeout: float = 20):
         self.token = token
@@ -300,7 +300,6 @@ class GitHubPublisher:
         self.path = path
         self._opener = opener or urllib.request.build_opener()
         self.timeout = timeout
-        self._branch_ok = False
 
     def _api(self, method: str, path: str, body: dict | None = None):
         req = urllib.request.Request(
@@ -326,65 +325,78 @@ class GitHubPublisher:
             except json.JSONDecodeError:
                 return e.code, {"message": raw[:200].decode("utf-8", "replace")}
 
-    def _ensure_branch(self) -> None:
-        if self._branch_ok:
-            return
-        status, _ = self._api("GET", f"/branches/{urllib.parse.quote(self.branch, safe='')}")
-        if status == 404:
-            status, repo = self._api("GET", "")
-            if status != 200:
-                raise RuntimeError(f"저장소 조회 실패 {status}: {repo.get('message')}")
-            status, ref = self._api("GET", f"/git/ref/heads/{repo['default_branch']}")
-            if status != 200:
-                raise RuntimeError(f"기본 브랜치 조회 실패 {status}: {ref.get('message')}")
-            status, res = self._api("POST", "/git/refs", {"ref": f"refs/heads/{self.branch}", "sha": ref["object"]["sha"]})
-            if status not in (200, 201):
-                raise RuntimeError(f"브랜치 생성 실패 {status}: {res.get('message')}")
-            log.info("대시보드 브랜치 %s 생성", self.branch)
-        elif status != 200:
-            raise RuntimeError(f"브랜치 조회 실패 {status} — 토큰 권한(Contents: Read and write)을 확인하세요")
-        self._branch_ok = True
-
     def put(self, content: bytes, message: str) -> None:
-        self._ensure_branch()
-        path = urllib.parse.quote(self.path)
-        for _ in range(2):
-            status, cur = self._api("GET", f"/contents/{path}?ref={urllib.parse.quote(self.branch, safe='')}")
-            body = {"message": message, "content": base64.b64encode(content).decode("ascii"), "branch": self.branch}
-            if status == 200:
-                body["sha"] = cur["sha"]
-            status, res = self._api("PUT", f"/contents/{path}", body)
+        """브랜치를 이 파일 하나만 든 새 커밋으로 덮어쓴다 (부모 없음).
+        5분마다 올려도 데이터 브랜치에 커밋 기록이 쌓이지 않게 하려고 (페이지는 최신 파일만 읽음)."""
+        status, tree = self._api(
+            "POST", "/git/trees", {"tree": [{"path": self.path, "mode": "100644", "type": "blob", "content": content.decode("utf-8")}]}
+        )
+        if status != 201:
+            raise RuntimeError(f"대시보드 업로드 실패 {status}: {tree.get('message')} — 토큰 권한(Contents: Read and write)을 확인하세요")
+        status, commit = self._api("POST", "/git/commits", {"message": message, "tree": tree["sha"], "parents": []})
+        if status != 201:
+            raise RuntimeError(f"대시보드 업로드 실패 {status}: {commit.get('message')}")
+        ref = f"heads/{urllib.parse.quote(self.branch, safe='')}"
+        status, res = self._api("PATCH", f"/git/refs/{ref}", {"sha": commit["sha"], "force": True})
+        if status in (404, 422):  # 브랜치가 아직 없음
+            status, res = self._api("POST", "/git/refs", {"ref": f"refs/heads/{self.branch}", "sha": commit["sha"]})
             if status in (200, 201):
-                return
-            if status not in (409, 422):  # sha 경합이면 한 번 더
-                break
-        raise RuntimeError(f"대시보드 업로드 실패 {status}: {res.get('message')}")
+                log.info("대시보드 브랜치 %s 생성", self.branch)
+        if status not in (200, 201):
+            raise RuntimeError(f"대시보드 업로드 실패 {status}: {res.get('message')}")
 
 
 class Dashboard:
-    def __init__(self, publisher: GitHubPublisher, password: str, heartbeat_minutes: int = 180):
+    def __init__(self, publisher: GitHubPublisher, password: str, heartbeat_minutes: int = 180, account_minutes: int = 5):
         self.publisher = publisher
         self.password = password
         self.heartbeat_minutes = heartbeat_minutes
+        self.account_minutes = account_minutes  # 계좌 전체를 이 간격으로 확인, 바뀌었으면 올림 (0 = 끔)
         self.last_published: datetime | None = None
+        self.last_checked: datetime | None = None
+        self._account_key: str | None = None  # 마지막으로 올린 계좌 전체 + 현금
 
     def due(self, now: datetime) -> bool:
         return self.last_published is None or (now - self.last_published).total_seconds() >= self.heartbeat_minutes * 60
 
-    def publish(self, bot, reason: str) -> None:
-        h = price = cash = session = plan = account = None
+    def account_due(self, now: datetime) -> bool:
+        if self.account_minutes <= 0:
+            return False
+        seen = [t for t in (self.last_checked, self.last_published) if t]
+        if not seen:
+            return True
+        last = max(seen)
+        return (now - last).total_seconds() >= self.account_minutes * 60
+
+    @staticmethod
+    def _key(account, cash) -> str:
+        return json.dumps([account_items(account), _s(cash)], sort_keys=True, default=str)
+
+    def refresh_account(self, bot) -> None:
+        """계좌 전체·현금만 가볍게 조회해서, 마지막으로 올린 것과 다르면 대시보드를 다시 올린다.
+        장이 닫혀 값이 그대로면 GitHub 에 올리지 않는다."""
+        self.last_checked = bot.clock()
+        account = bot.toss.holdings_all()
+        cash = bot.toss.buying_power("USD")
+        if self._key(account, cash) != self._account_key:
+            self.publish(bot, "account", account=account, cash=cash)
+
+    def publish(self, bot, reason: str, *, account=None, cash=None) -> None:
+        h = price = session = plan = None
         try:
             h = bot.toss.holding(bot.symbol)
             price = bot.toss.price(bot.symbol)
-            cash = bot.toss.buying_power("USD")
+            if cash is None:
+                cash = bot.toss.buying_power("USD")
             session = bot.next_session()
         except Exception as e:  # 조회가 실패해도 상태만이라도 올린다
             log.warning("대시보드용 조회 실패: %s", e)
         try:  # 계좌 전체 보유 (봇 종목 외 포함). 실패해도 나머지는 올린다
-            account = bot.toss.holdings_all()
+            if account is None:
+                account = bot.toss.holdings_all()
         except Exception as e:
             log.warning("대시보드용 계좌 전체 조회 실패: %s", e)
-        realized = realized_view(bot)  # 봇 밖에서 판 종목의 실현 손익 (실패해도 빈 값)
+        realized = realized_view(bot, fetch=reason != "account")  # 봇 밖에서 판 종목의 실현 손익 (5분 갱신 땐 저장된 것만)
         tax = tax_view(bot)  # 올해 양도세 대략치 (저장된 값, 오래되면 뒤에서 갱신)
         fx = _fx_now(bot.toss)
         if session and session.date not in bot.state.days:
@@ -397,4 +409,5 @@ class Dashboard:
         )
         self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}")
         self.last_published = bot.clock()
+        self._account_key = self._key(account, cash)
         log.info("대시보드 갱신 (%s)", reason)
