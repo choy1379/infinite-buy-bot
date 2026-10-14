@@ -237,7 +237,7 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
     return new
 
 
-def sync_view(bot) -> dict | None:
+def sync_view(bot, fetch: bool = True) -> dict | None:
     """대시보드 갱신 때 호출: 새 매도를 기록하고 화면용 요약을 돌려준다. 실패해도 대시보드는 계속 올라가야 한다."""
     try:
         rlog = RealizedLog(bot.cfg.run.state_dir / "realized.json")
@@ -245,7 +245,8 @@ def sync_view(bot) -> dict | None:
         log.warning("실현손익 기록 파일을 못 읽었습니다: %s", e)
         return None
     try:
-        sync(bot.toss, rlog, skip_symbol=bot.symbol)
+        if fetch:
+            sync(bot.toss, rlog, skip_symbol=bot.symbol)
     except Exception as e:  # 조회가 실패해도 이미 기록한 내역은 계속 보여 준다
         log.warning("실현손익 조회 실패: %s", e)
     view = rlog.view()

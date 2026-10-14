@@ -7,7 +7,7 @@ import unittest
 from decimal import Decimal as D
 from pathlib import Path
 
-from laoer.dashboard import GitHubPublisher, build_payload, decrypt, encrypt
+from laoer.dashboard import Dashboard, GitHubPublisher, build_payload, decrypt, encrypt
 from tests import test_bot as tb
 
 PAGE = Path(__file__).resolve().parents[1] / "index.html"
@@ -125,26 +125,20 @@ class FakeGitHub:
     def __init__(self):
         self.calls = []
         self.branch_exists = False
-        self.file_sha = None
 
     def open(self, req, timeout=None):
         body = json.loads(req.data) if req.data else None
         url = req.full_url.replace("https://api.github.com/repos/o/r", "")
         self.calls.append((req.get_method(), url, body))
         m = req.get_method()
-        if m == "GET" and url.startswith("/branches/"):
-            return self._resp(200 if self.branch_exists else 404, {})
-        if m == "GET" and url == "":
-            return self._resp(200, {"default_branch": "main"})
-        if m == "GET" and url == "/git/ref/heads/main":
-            return self._resp(200, {"object": {"sha": "abc"}})
+        if m == "POST" and url == "/git/trees":
+            return self._resp(201, {"sha": "tree1"})
+        if m == "POST" and url == "/git/commits":
+            return self._resp(201, {"sha": f"commit{len(self.calls)}"})
+        if m == "PATCH" and url == "/git/refs/heads/tecl-data":
+            return self._resp(200, {}) if self.branch_exists else self._resp(422, {"message": "Reference does not exist"})
         if m == "POST" and url == "/git/refs":
             self.branch_exists = True
-            return self._resp(201, {})
-        if m == "GET" and url.startswith("/contents/"):
-            return self._resp(200, {"sha": self.file_sha}) if self.file_sha else self._resp(404, {})
-        if m == "PUT":
-            self.file_sha = "sha2"
             return self._resp(201, {})
         return self._resp(500, {"message": "unexpected"})
 
@@ -170,17 +164,59 @@ class FakeGitHub:
 
 
 class PublisherTest(unittest.TestCase):
-    def test_creates_branch_then_updates_with_sha(self):
+    def test_creates_branch_then_replaces_with_parentless_commit(self):
         gh = FakeGitHub()
         pub = GitHubPublisher("tok", "o/r", "tecl-data", opener=gh)
-        pub.put(b'{"a":1}', "first")
-        self.assertIn(("POST", "/git/refs", {"ref": "refs/heads/tecl-data", "sha": "abc"}), gh.calls)
-        put1 = [c for c in gh.calls if c[0] == "PUT"][0]
-        self.assertEqual(put1[2]["branch"], "tecl-data")
-        self.assertNotIn("sha", put1[2])
+        pub.put('{"a":"한글"}'.encode(), "first")
+        tree = [c for c in gh.calls if c[1] == "/git/trees"][0][2]["tree"][0]
+        self.assertEqual((tree["path"], tree["content"]), ("dashboard.json", '{"a":"한글"}'))
+        commit = [c for c in gh.calls if c[1] == "/git/commits"][0][2]
+        self.assertEqual((commit["tree"], commit["parents"]), ("tree1", []))
+        self.assertIn(("POST", "/git/refs", {"ref": "refs/heads/tecl-data", "sha": "commit2"}), gh.calls)
+        gh.calls.clear()
         pub.put(b'{"a":2}', "second")
-        put2 = [c for c in gh.calls if c[0] == "PUT"][1]
-        self.assertEqual(put2[2]["sha"], "sha2")
+        self.assertEqual([c[0] for c in gh.calls], ["POST", "POST", "PATCH"])
+        self.assertTrue(gh.calls[-1][2]["force"])
+
+
+class FakePublisher:
+    def __init__(self):
+        self.puts = []
+
+    def put(self, content, message):
+        self.puts.append(message)
+
+
+class AccountRefreshTest(unittest.TestCase):
+    DATES = tb.BotFlowTest.DATES
+    setUp = tb.BotFlowTest.setUp
+    tearDown = tb.BotFlowTest.tearDown
+    make_bot = tb.BotFlowTest.make_bot
+    at = tb.BotFlowTest.at
+
+    def test_publishes_only_when_account_changes(self):
+        bot = self.make_bot()
+        pub = FakePublisher()
+        dash = bot.dashboard = Dashboard(pub, "pw-12345678", heartbeat_minutes=180, account_minutes=5)
+        items = [{"symbol": "TECL", "quantity": "10", "lastPrice": "100", "marketValue": {"amount": "1000"}}]
+        self.broker.holdings_all = lambda: {"items": [dict(i) for i in items]}
+        self.at(2026, 10, 7, 10, 0)
+        self.assertTrue(dash.account_due(bot.clock()))
+        dash.publish(bot, "start")
+        self.assertFalse(dash.account_due(bot.clock()))
+        self.at(2026, 10, 7, 10, 5)
+        self.assertTrue(dash.account_due(bot.clock()))
+        dash.refresh_account(bot)  # 그대로면 안 올림
+        self.assertEqual(pub.puts, ["dashboard: start"])
+        self.assertFalse(dash.account_due(bot.clock()))
+        items[0]["lastPrice"], items[0]["marketValue"] = "101", {"amount": "1010"}
+        self.at(2026, 10, 7, 10, 10)
+        dash.refresh_account(bot)
+        self.assertEqual(pub.puts, ["dashboard: start", "dashboard: account"])
+
+    def test_zero_turns_it_off(self):
+        dash = Dashboard(FakePublisher(), "pw-12345678", account_minutes=0)
+        self.assertFalse(dash.account_due(tb.datetime(2026, 10, 7, tzinfo=tb.KST)))
 
 
 if __name__ == "__main__":
