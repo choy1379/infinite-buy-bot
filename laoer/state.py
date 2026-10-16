@@ -12,9 +12,25 @@ KEEP_DAYS = 120
 class State:
     def __init__(self, path: Path):
         self.path = Path(path)
+        self._stamp = None
+        self._load()
+
+    def _load(self) -> None:
         self.data: dict = {"version": 1, "cycle": None, "days": {}, "history": []}
         if self.path.exists():
             self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
+            self._stamp = self._file_stamp()
+
+    def _file_stamp(self):
+        st = self.path.stat()
+        return st.st_mtime_ns, st.st_size
+
+    def reload_if_changed(self) -> bool:
+        """다른 프로세스(`python -m laoer order --force` 등)가 파일을 바꿨으면 다시 읽는다. 안 그러면 다음 저장 때 그 기록을 덮어쓴다."""
+        if not self.path.exists() or self._file_stamp() == self._stamp:
+            return False
+        self._load()
+        return True
 
     @property
     def cycle(self) -> dict | None:
@@ -46,3 +62,4 @@ class State:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
+        self._stamp = self._file_stamp()

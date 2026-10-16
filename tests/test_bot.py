@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal as D
 from pathlib import Path
@@ -352,6 +353,26 @@ class BotFlowTest(unittest.TestCase):
         self.assertIn("사이클 #1 완료", self.capture.titles()[-1])
         self.assertTrue(any("토스증권 앱" in line for line in self.capture.messages[-1].lines))
         self.assertEqual(self.broker.orders, {})
+
+    def test_compound_skips_cycles_closed_outside_the_bot(self):
+        bot = self.make_bot()
+        bot.cfg = replace(bot.cfg, compound=True)
+        bot.state.history.append({"id": 1, "seed": "10000", "profit": "500", "closed_outside": False})
+        self.assertEqual(bot._new_cycle("2026-10-06", mutate=False)["seed"], "10500")
+        # 앱에서 직접 다 팔아 매도 금액을 모름 → 손익이 -매수금으로 찍혀도 원금을 줄이지 않는다
+        bot.state.history.append({"id": 2, "seed": "10500", "profit": "-4000", "closed_outside": True})
+        self.assertEqual(bot._new_cycle("2026-10-07", mutate=False)["seed"], "10000")
+
+    def test_tick_picks_up_state_written_by_another_command(self):
+        bot = self.make_bot()
+        bot.state.save()
+        other = State(bot.state.path)  # 봇이 도는 중에 `order --force` 같은 명령이 쓴 기록
+        other.days["2026-10-06"] = {"status": "placed", "orders": [{"leg": "first", "side": "BUY", "order_id": "x"}]}
+        other.save()
+        bot.tick()
+        self.assertEqual(bot.state.days["2026-10-06"]["orders"][0]["order_id"], "x")
+        bot.state.save()
+        self.assertIn("2026-10-06", State(bot.state.path).days)
 
 
 if __name__ == "__main__":
