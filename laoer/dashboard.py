@@ -393,7 +393,8 @@ class Dashboard:
     def alive_due(self, now: datetime) -> bool:
         if self.alive_minutes <= 0:
             return False
-        return self.last_alive is None or (now - self.last_alive).total_seconds() >= self.alive_minutes * 60
+        # 대기가 정확히 간격이라 몇 초 모자라 한 틱을 거르는 일이 없게 1분 여유를 둔다
+        return self.last_alive is None or (now - self.last_alive).total_seconds() >= max(self.alive_minutes * 60 - 60, 30)
 
     def alive_bytes(self, bot) -> bytes:
         """PC 밖 감시(GitHub Actions)가 읽는 파일. 터널 주소는 대시보드 비밀번호로 잠가서 넣는다 (비밀번호가 있는 쪽만 열어 봄)."""
