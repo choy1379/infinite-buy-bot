@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>TECL 무한매수</title>
+<script>try { const t = localStorage.getItem('ibb-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
@@ -23,16 +24,16 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1424; --surface: #181f33; --ink: #e8ebf4; --muted: #9aa3bd; --line: #2a3350;
-      --accent: #8c9bff; --on-accent: #0f1424;
+      --bg: #161c2e; --surface: #232b44; --ink: #eef0f7; --muted: #a7afc8; --line: #3a4466;
+      --accent: #8c9bff; --on-accent: #161c2e;
       --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
       --buy: #f08080; --sell: #8cb1ff;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0f1424; --surface: #181f33; --ink: #e8ebf4; --muted: #9aa3bd; --line: #2a3350;
-    --accent: #8c9bff; --on-accent: #0f1424;
+    --bg: #161c2e; --surface: #232b44; --ink: #eef0f7; --muted: #a7afc8; --line: #3a4466;
+    --accent: #8c9bff; --on-accent: #161c2e;
     --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
     --buy: #f08080; --sell: #8cb1ff;
     color-scheme: dark;
@@ -170,6 +171,8 @@
     main { max-width: 1200px; }
     .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  button.theme { flex: none; padding: 6px 12px; font-size: 0.85rem; }
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
   .tabs button { background: transparent; color: var(--muted); border-radius: 8px 8px 0 0; padding: 8px 16px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
   .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
@@ -222,7 +225,10 @@
 </head>
 <body>
 <main>
-  <h1>TECL 무한매수<small id="subtitle">라오어 무한매수법 · 토스증권 자동매매</small></h1>
+  <div class="top">
+    <h1>TECL 무한매수<small id="subtitle">라오어 무한매수법 · 토스증권 자동매매</small></h1>
+    <button type="button" class="ghost theme" id="theme-btn" aria-label="화면 밝기 바꾸기"></button>
+  </div>
 
   <div class="tabs" role="tablist" aria-label="화면">
     <button type="button" role="tab" id="tabbtn-bot" aria-controls="tab-bot" aria-selected="true">무한매수</button>
@@ -839,6 +845,16 @@
 
   const dark = () => document.documentElement.dataset.theme === 'dark' ||
     (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  function paintThemeBtn() { el('theme-btn').textContent = dark() ? '☀️ 밝게' : '🌙 어둡게'; }
+  el('theme-btn').addEventListener('click', () => {
+    const next = dark() ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('ibb-theme', next); } catch (e) {}
+    paintThemeBtn();
+    if (heatLoaded) { heatLoaded = false; el('heat').innerHTML = ''; if (!el('tab-market').hidden) loadHeat(); }
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintThemeBtn);
+  paintThemeBtn();
   function loadHeat() {
     if (heatLoaded) return;
     heatLoaded = true;
