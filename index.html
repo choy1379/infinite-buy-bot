@@ -8,34 +8,34 @@
 <script>try { const t = localStorage.getItem('ibb-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   /* 레이아웃: 상태 → 핵심 지표(공개) → 잠금 해제(금액) → 날짜별 주문 → 완료 사이클 */
   :root {
-    --bg: #eef1f6; --surface: #ffffff; --ink: #1b2236; --muted: #5d6680; --line: #d7dce7;
-    --accent: #3d4fd1; --on-accent: #ffffff;
-    --ok: #1f8a4c;  --ok-bg: #e2f4ea;
-    --low: #a35a00; --low-bg: #fcefd9;
-    --bad: #c23a3a; --bad-bg: #fbe4e4;
-    --buy: #c23a3a; --sell: #2f5fd0;   /* 한국식: 매수 빨강, 매도 파랑 */
-    --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-    --font-mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+    --bg: #f2f4f6; --surface: #ffffff; --ink: #191f28; --muted: #6b7684; --line: #e5e8eb;
+    --accent: #3182f6; --on-accent: #ffffff; --soft: #f2f4f6;
+    --ok: #13854e;  --ok-bg: #e5f7ed;
+    --low: #b25e00; --low-bg: #fff3e0;
+    --bad: #e42939; --bad-bg: #ffeeee;
+    --buy: #e42939; --sell: #2272eb;   /* 한국식: 매수 빨강, 매도 파랑 */
+    --font-body: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --font-mono: var(--font-body);
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #161c2e; --surface: #232b44; --ink: #eef0f7; --muted: #a7afc8; --line: #3a4466;
-      --accent: #8c9bff; --on-accent: #161c2e;
-      --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
-      --buy: #f08080; --sell: #8cb1ff;
+      --bg: #101012; --surface: #1d1d22; --ink: #ececf0; --muted: #9e9ea7; --line: #2e2e36;
+      --accent: #4c94ff; --on-accent: #ffffff; --soft: #2a2a31;
+      --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
+      --buy: #ff6b76; --sell: #5b9dff;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #161c2e; --surface: #232b44; --ink: #eef0f7; --muted: #a7afc8; --line: #3a4466;
-    --accent: #8c9bff; --on-accent: #161c2e;
-    --ok: #5fd08f; --ok-bg: #173527; --low: #f2b45a; --low-bg: #3a2a12; --bad: #f08080; --bad-bg: #3d1c1f;
-    --buy: #f08080; --sell: #8cb1ff;
+    --bg: #101012; --surface: #1d1d22; --ink: #ececf0; --muted: #9e9ea7; --line: #2e2e36;
+    --accent: #4c94ff; --on-accent: #ffffff; --soft: #2a2a31;
+    --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
+    --buy: #ff6b76; --sell: #5b9dff;
     color-scheme: dark;
   }
 
@@ -221,6 +221,43 @@
   @media (max-width: 420px) { .kv { grid-template-columns: 1fr; } .stat .value { font-size: 1.25rem; } }
   .fx{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:0.88rem;margin:-4px 0 14px;color:var(--muted)}
   .fx b{color:var(--ink);font-weight:600}
+
+  /* 토스풍: 테두리 없는 흰 카드, 큰 숫자, 넉넉한 여백 */
+  body { -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+  main { gap: 16px; }
+  h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; }
+  h2 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+  .mono { font-feature-settings: "tnum"; letter-spacing: -0.02em; }
+  .card, .stat, .day, .heat, .empty { border: 0; border-radius: 20px; }
+  .card { padding: 20px; }
+  .stat { padding: 18px 20px; }
+  .stat .label { font-size: 0.85rem; }
+  .stat .value { font-size: 1.4rem; letter-spacing: -0.03em; }
+  .stat.span { grid-column: 1 / -1; }
+  .stat.hero { grid-column: 1 / -1; padding: 22px 20px; }
+  .stat.hero .value { font-size: 2.4rem; line-height: 1.15; margin: 4px 0 2px; }
+  .bar { background: var(--soft); }
+  .pill { padding: 4px 10px; border-radius: 8px; }
+  .pill::before { display: none; }
+  .pill.idle { background: var(--soft); border: 0; }
+  .notice { border-radius: 14px; padding: 14px 16px; }
+  button { border-radius: 12px; }
+  button.ghost { background: var(--soft); border: 0; color: var(--ink); }
+  button.theme { padding: 8px 12px; font-size: 0.82rem; color: var(--muted); background: var(--surface); }
+  .lock input[type=password] { background: var(--soft); border: 0; border-radius: 12px; }
+  .kv div { border-bottom: 0; padding: 6px 0; }
+  .tabs { border-bottom: 0; background: var(--soft); padding: 4px; border-radius: 12px; width: fit-content; gap: 2px; }
+  :root .tabs { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .tabs button { border: 0; margin: 0; border-radius: 9px; padding: 7px 18px; font-weight: 600; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
+  .cal-cell { border: 0; background: var(--soft); border-radius: 10px; }
+  .cal-cell.blank { background: transparent; }
+  .heat { background: var(--surface); }
+  .acct .logo { border: 0; }
+  .acct .tot { border-top: 1px solid var(--line); }
+  .acct .bot { border: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .empty { border: 0; }
+  @media (max-width: 420px) { .stat.hero .value { font-size: 2.1rem; } }
 </style>
 </head>
 <body>
@@ -250,7 +287,7 @@
   </details>
 
   <section class="card lock" id="lock">
-    <h2>🔒 금액 정보</h2>
+    <h2>금액 정보</h2>
     <form id="unlock">
       <input type="password" id="pw" autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호">
       <button type="submit">열기</button>
@@ -417,17 +454,17 @@
     const ns = data.nextSession;
     const c = data.cycle;
     el('stats').innerHTML = `
+      <div class="stat hero"><div class="label">평가손익</div>
+        <div class="value mono ${sign(p.plRate)}">${p.hasPosition ? pct(p.plRate) : '–'}</div>
+        <div class="sub">목표 +${esc(data.targetPct)}%에서 ¾ 익절</div></div>
       <div class="stat"><div class="label">T값 (${splits}분할)</div>
         <div class="value mono">${t === null ? '0' : t.toFixed(2)}<span class="muted" style="font-size:.9rem"> / ${splits}</span></div>
         <div class="bar ${t !== null && t >= splits / 2 ? 'half' : ''}" role="img" aria-label="자금 사용 ${tPct.toFixed(0)}%"><span style="width:${tPct}%"></span></div>
         <div class="sub">${phase}</div></div>
-      <div class="stat"><div class="label">평가손익</div>
-        <div class="value mono ${sign(p.plRate)}">${p.hasPosition ? pct(p.plRate) : '–'}</div>
-        <div class="sub">목표 +${esc(data.targetPct)}%에서 ¾ 익절</div></div>
       <div class="stat"><div class="label">사이클</div>
         <div class="value">${c ? `#${c.id}` : '–'}</div>
         <div class="sub">${c ? `${esc(c.started)} 시작 · ${c.tradingDays}거래일째` : '다음 장에 새로 시작'}</div></div>
-      <div class="stat"><div class="label">다음 주문</div>
+      <div class="stat span"><div class="label">다음 주문</div>
         <div class="value mono" style="font-size:1.15rem">${ns ? kst(ns.orderAt) : '–'}</div>
         <div class="sub">${ns ? `정규장 ${kst(ns.start)} ~ ${kst(ns.end).split(' ').pop()} (한국시간)` : ''}</div></div>`;
   }
@@ -441,7 +478,7 @@
     const used = num(c.bought) !== null && num(c.seed) ? num(c.bought) - num(c.sold || 0) : null;
     box.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-        <h2 style="margin:0">🔓 금액 정보</h2><button class="ghost" id="relock" type="button">다시 잠그기</button></div>
+        <h2 style="margin:0">금액 정보</h2><button class="ghost" id="relock" type="button">다시 잠그기</button></div>
       <dl class="kv">
         <div><dt>보유</dt><dd class="mono">${h ? qty(h.qty) + '주' : '0주'}</dd></div>
         <div><dt>평단</dt><dd class="mono">${h ? usd(h.avg) : '–'}</dd></div>
@@ -577,7 +614,7 @@
       const label = o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg);
       const detail = so ? `${so.qty}주 @ ${usd(so.price)}${o.leg === 'first' ? '<span class="est">예상</span>' : ''}` : '';
       return `<div class="ord"><span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span>
-        <span>${label}</span><span class="mono">${detail || '<span class="muted">🔒</span>'}</span></div>`;
+        <span>${label}</span><span class="mono">${detail || '<span class="muted">잠김</span>'}</span></div>`;
     }).join('');
     const kv = sp ? `<dl class="kv">
         <div><dt>평단</dt><dd class="mono">${num(sp.avg) ? usd(sp.avg) : '–'}</dd></div>
@@ -845,7 +882,7 @@
 
   const dark = () => document.documentElement.dataset.theme === 'dark' ||
     (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  function paintThemeBtn() { el('theme-btn').textContent = dark() ? '☀️ 밝게' : '🌙 어둡게'; }
+  function paintThemeBtn() { el('theme-btn').textContent = dark() ? '밝게 보기' : '어둡게 보기'; }
   el('theme-btn').addEventListener('click', () => {
     const next = dark() ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
