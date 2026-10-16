@@ -141,8 +141,9 @@ class Bot:
     # ------------------------------------------------------------------ cycle
     def _new_cycle(self, date: str, *, qty=ZERO, avg=ZERO, mutate: bool = True) -> dict:
         seed = self.cfg.capital_usd
-        if self.cfg.compound and self.state.history:
-            last = self.state.history[-1]
+        last = self.state.history[-1] if self.state.history else None
+        # 봇 밖에서 끝난 사이클(수동 매도)·알림 전용 사이클은 매도 금액을 몰라 손익이 틀리므로 복리에 쓰지 않는다
+        if self.cfg.compound and last and not last.get("closed_outside") and not last.get("alert"):
             seed = _d(last["seed"]) + _d(last["profit"])
             if seed <= 0:
                 seed = self.cfg.capital_usd
@@ -587,6 +588,8 @@ class Bot:
         """할 일을 하고, 다음에 깨어날 때까지의 초를 돌려준다."""
         now = self.clock()
         run = self.cfg.run
+        if self.state.reload_if_changed():
+            log.info("다른 명령이 상태 파일을 바꿔서 다시 읽었습니다")
         for date in sorted(self.state.days):
             day = self.state.days[date]
             if day.get("status") == "placing":
