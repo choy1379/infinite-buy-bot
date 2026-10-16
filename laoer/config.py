@@ -59,6 +59,7 @@ class DashboardConfig:
     password: str
     heartbeat_minutes: int
     account_minutes: int = 5
+    alive_minutes: int = 5
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,7 @@ def load_config(path: str | Path, *, require_toss: bool = True) -> Config:
             password=password,
             heartbeat_minutes=int(db.get("heartbeat_minutes", 180)),
             account_minutes=int(db.get("account_minutes", 5)),
+            alive_minutes=int(db.get("alive_minutes", 5)),
         )
 
     lv = raw.get("live", {})

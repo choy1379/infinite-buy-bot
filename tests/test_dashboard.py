@@ -131,6 +131,10 @@ class FakeGitHub:
         url = req.full_url.replace("https://api.github.com/repos/o/r", "")
         self.calls.append((req.get_method(), url, body))
         m = req.get_method()
+        if m == "GET" and url == "/git/ref/heads/tecl-data":
+            return self._resp(200, {"object": {"sha": "head1"}}) if self.branch_exists else self._resp(404, {"message": "Not Found"})
+        if m == "GET" and url == "/git/commits/head1":
+            return self._resp(200, {"tree": {"sha": "basetree"}})
         if m == "POST" and url == "/git/trees":
             return self._resp(201, {"sha": "tree1"})
         if m == "POST" and url == "/git/commits":
@@ -178,13 +182,40 @@ class PublisherTest(unittest.TestCase):
         self.assertEqual([c[0] for c in gh.calls], ["POST", "POST", "PATCH"])
         self.assertTrue(gh.calls[-1][2]["force"])
 
+    def test_put_can_carry_extra_files(self):
+        gh = FakeGitHub()
+        pub = GitHubPublisher("tok", "o/r", "tecl-data", opener=gh)
+        pub.put(b"{}", "m", {"alive.json": b'{"x":1}'})
+        tree = [c for c in gh.calls if c[1] == "/git/trees"][0][2]["tree"]
+        self.assertEqual([t["path"] for t in tree], ["dashboard.json", "alive.json"])
+
+    def test_touch_changes_one_file_on_top_of_existing_tree(self):
+        gh = FakeGitHub()
+        pub = GitHubPublisher("tok", "o/r", "tecl-data", opener=gh)
+        with self.assertRaises(RuntimeError):  # 브랜치가 없으면 대시보드가 먼저
+            pub.touch("alive.json", b"{}", "alive")
+        gh.branch_exists = True
+        gh.calls.clear()
+        pub.touch("alive.json", b'{"a":1}', "alive")
+        body = [c for c in gh.calls if c[1] == "/git/trees"][0][2]
+        self.assertEqual(body["base_tree"], "basetree")
+        self.assertEqual([t["path"] for t in body["tree"]], ["alive.json"])
+        self.assertEqual([c for c in gh.calls if c[1] == "/git/commits"][0][2]["parents"], [])
+        self.assertTrue(gh.calls[-1][2]["force"])
+
 
 class FakePublisher:
     def __init__(self):
         self.puts = []
+        self.touches = []
+        self.extras = []
 
-    def put(self, content, message):
+    def put(self, content, message, extra=None):
         self.puts.append(message)
+        self.extras.append(extra)
+
+    def touch(self, path, content, message):
+        self.touches.append((path, json.loads(content)))
 
 
 class AccountRefreshTest(unittest.TestCase):
@@ -213,6 +244,40 @@ class AccountRefreshTest(unittest.TestCase):
         self.at(2026, 10, 7, 10, 10)
         dash.refresh_account(bot)
         self.assertEqual(pub.puts, ["dashboard: start", "dashboard: account"])
+
+    def test_alive_beat_every_five_minutes_and_rides_along_with_publish(self):
+        bot = self.make_bot()
+        bot.live_url = "https://abc.trycloudflare.com"
+        pub = FakePublisher()
+        dash = Dashboard(pub, "pw-12345678", alive_minutes=5)
+        self.at(2026, 10, 7, 10, 0)
+        self.assertTrue(dash.alive_due(bot.clock()))
+        dash.publish(bot, "start")  # 본문을 올릴 때 살아있음 파일도 같이
+        alive = json.loads(pub.extras[-1]["alive.json"])
+        self.assertEqual(alive["symbol"], bot.symbol)
+        self.assertEqual(decrypt("pw-12345678", alive["tunnel"]).decode(), "https://abc.trycloudflare.com")
+        self.assertFalse(dash.alive_due(bot.clock()))
+        self.at(2026, 10, 7, 10, 5)
+        self.assertTrue(dash.alive_due(bot.clock()))
+        dash.beat(bot)
+        self.assertEqual([t[0] for t in pub.touches], ["alive.json"])
+        self.assertTrue(pub.touches[0][1]["aliveAt"].startswith("2026-10-07T10:05"))
+        self.assertFalse(dash.alive_due(bot.clock()))
+
+    def test_alive_off_when_zero_and_failure_waits_for_next_interval(self):
+        bot = self.make_bot()
+        pub = FakePublisher()
+        dash = Dashboard(pub, "pw-12345678", alive_minutes=0)
+        self.assertFalse(dash.alive_due(bot.clock()))
+        dash.beat(bot)
+        dash.publish(bot, "x")
+        self.assertEqual((pub.touches, pub.extras[-1]), ([], None))
+        dash = Dashboard(pub, "pw-12345678", alive_minutes=5)
+        pub.touch = lambda *a: (_ for _ in ()).throw(RuntimeError("boom"))
+        self.at(2026, 10, 7, 10, 0)
+        with self.assertRaises(RuntimeError):
+            dash.beat(bot)
+        self.assertFalse(dash.alive_due(bot.clock()))
 
     def test_zero_turns_it_off(self):
         dash = Dashboard(FakePublisher(), "pw-12345678", account_minutes=0)
