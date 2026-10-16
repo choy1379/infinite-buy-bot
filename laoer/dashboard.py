@@ -325,12 +325,28 @@ class GitHubPublisher:
             except json.JSONDecodeError:
                 return e.code, {"message": raw[:200].decode("utf-8", "replace")}
 
-    def put(self, content: bytes, message: str) -> None:
-        """브랜치를 이 파일 하나만 든 새 커밋으로 덮어쓴다 (부모 없음).
+    @staticmethod
+    def _blob(path: str, content: bytes) -> dict:
+        return {"path": path, "mode": "100644", "type": "blob", "content": content.decode("utf-8")}
+
+    def put(self, content: bytes, message: str, extra: dict[str, bytes] | None = None) -> None:
+        """브랜치를 이 파일(과 extra 의 파일들)만 든 새 커밋으로 덮어쓴다 (부모 없음).
         5분마다 올려도 데이터 브랜치에 커밋 기록이 쌓이지 않게 하려고 (페이지는 최신 파일만 읽음)."""
-        status, tree = self._api(
-            "POST", "/git/trees", {"tree": [{"path": self.path, "mode": "100644", "type": "blob", "content": content.decode("utf-8")}]}
-        )
+        files = [self._blob(self.path, content)] + [self._blob(p, c) for p, c in (extra or {}).items()]
+        self._commit({"tree": files}, message)
+
+    def touch(self, path: str, content: bytes, message: str) -> None:
+        """브랜치의 다른 파일은 그대로 두고 한 파일만 바꿔 다시 한 커밋으로 덮어쓴다 (살아있음 시각 5분 갱신용)."""
+        status, ref = self._api("GET", f"/git/ref/heads/{urllib.parse.quote(self.branch, safe='')}")
+        if status != 200:
+            raise RuntimeError(f"살아있음 갱신 실패 {status}: {ref.get('message')} (브랜치가 아직 없으면 대시보드가 먼저 올라가야 합니다)")
+        status, base = self._api("GET", f"/git/commits/{ref['object']['sha']}")
+        if status != 200:
+            raise RuntimeError(f"살아있음 갱신 실패 {status}: {base.get('message')}")
+        self._commit({"base_tree": base["tree"]["sha"], "tree": [self._blob(path, content)]}, message)
+
+    def _commit(self, tree_body: dict, message: str) -> None:
+        status, tree = self._api("POST", "/git/trees", tree_body)
         if status != 201:
             raise RuntimeError(f"대시보드 업로드 실패 {status}: {tree.get('message')} — 토큰 권한(Contents: Read and write)을 확인하세요")
         status, commit = self._api("POST", "/git/commits", {"message": message, "tree": tree["sha"], "parents": []})
@@ -347,10 +363,16 @@ class GitHubPublisher:
 
 
 class Dashboard:
-    def __init__(self, publisher: GitHubPublisher, password: str, heartbeat_minutes: int = 180, account_minutes: int = 5):
+    ALIVE_PATH = "alive.json"
+
+    def __init__(
+        self, publisher: GitHubPublisher, password: str, heartbeat_minutes: int = 180, account_minutes: int = 5, alive_minutes: int = 5
+    ):
         self.publisher = publisher
         self.password = password
         self.heartbeat_minutes = heartbeat_minutes
+        self.alive_minutes = alive_minutes  # '살아있음' 시각을 이 간격으로 따로 올림 (0 = 끔). 계좌가 그대로라 대시보드를 안 올리는 때도 PC 밖 감시가 볼 수 있게
+        self.last_alive: datetime | None = None
         self.account_minutes = account_minutes  # 계좌 전체를 이 간격으로 확인, 바뀌었으면 올림 (0 = 끔)
         self.last_published: datetime | None = None
         self.last_checked: datetime | None = None
@@ -367,6 +389,29 @@ class Dashboard:
             return True
         last = max(seen)
         return (now - last).total_seconds() >= self.account_minutes * 60
+
+    def alive_due(self, now: datetime) -> bool:
+        if self.alive_minutes <= 0:
+            return False
+        return self.last_alive is None or (now - self.last_alive).total_seconds() >= self.alive_minutes * 60
+
+    def alive_bytes(self, bot) -> bytes:
+        """PC 밖 감시(GitHub Actions)가 읽는 파일. 터널 주소는 대시보드 비밀번호로 잠가서 넣는다 (비밀번호가 있는 쪽만 열어 봄)."""
+        now = bot.clock()
+        self.last_alive = now
+        url = getattr(bot, "live_url", None)
+        tunnel = encrypt(self.password, url.encode("utf-8")) if url and self.password else None
+        return json.dumps({"aliveAt": now.isoformat(), "symbol": bot.symbol, "tunnel": tunnel}, ensure_ascii=False).encode("utf-8")
+
+    def beat(self, bot) -> None:
+        """살아있음 시각만 올린다. 대시보드 본문(dashboard.json)은 건드리지 않는다."""
+        if self.alive_minutes <= 0:
+            return
+        try:
+            self.publisher.touch(self.ALIVE_PATH, self.alive_bytes(bot), "alive")
+        except Exception:
+            self.last_alive = bot.clock()  # 실패해도 다음 간격에 다시 (매 틱 두드리지 않게)
+            raise
 
     @staticmethod
     def _key(account, cash) -> str:
@@ -407,7 +452,8 @@ class Dashboard:
         payload = build_payload(
             bot, holding=h, price=price, cash=cash, session=session, plan=plan, password=self.password, account=account, realized=realized, tax=tax, fx=fx
         )
-        self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}")
+        extra = {self.ALIVE_PATH: self.alive_bytes(bot)} if self.alive_minutes > 0 else None
+        self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}", extra)
         self.last_published = bot.clock()
         self._account_key = self._key(account, cash)
         log.info("대시보드 갱신 (%s)", reason)

@@ -1,0 +1,33 @@
+name: 봇 살아있나 감시
+
+on:
+  schedule:
+    # UTC 기준. 한국 22:20, 05:30 에 한 번씩, 그 외는 3시간마다 (GitHub 예약은 몇 분 늦게 돌 수 있음)
+    - cron: "20 13 * * *"
+    - cron: "30 20 * * *"
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      send_test:
+        description: "정상이어도 테스트 알림 보내기 (웹훅 확인용)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 확인하고 문제면 디스코드 알림
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          SEND_TEST: ${{ inputs.send_test && '1' || '' }}
+        run: python -m laoer.watchdog

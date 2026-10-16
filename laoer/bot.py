@@ -648,6 +648,12 @@ class Bot:
         except Exception as e:  # 대시보드 실패가 매매를 멈추면 안 된다
             log.warning("계좌 전체 갱신 실패: %s", e)
 
+    def _beat(self) -> None:
+        try:
+            self.dashboard.beat(self)
+        except Exception as e:  # 살아있음 표시 실패가 매매를 멈추면 안 된다
+            log.warning("살아있음 갱신 실패: %s", e)
+
     def _notify_error(self, err: Exception) -> None:
         key = str(err)[:200]
         now = self.clock()
@@ -687,8 +693,12 @@ class Bot:
                     wait = 300
                 finally:
                     keep_awake(False)
+                if self.dashboard and self.dashboard.alive_due(self.clock()):  # 틱이 실패했어도 프로세스는 살아있다
+                    self._beat()
                 if self.dashboard and self.dashboard.account_minutes > 0:  # 계좌 전체 확인 간격보다 오래 자지 않음
                     wait = min(wait, self.dashboard.account_minutes * 60)
+                if self.dashboard and self.dashboard.alive_minutes > 0:
+                    wait = min(wait, self.dashboard.alive_minutes * 60)
                 wait = min(max(wait, 30.0), 1800.0)
                 log.info("다음 확인까지 %.0f초 대기", wait)
                 self.sleep(wait)
