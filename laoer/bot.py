@@ -357,12 +357,16 @@ class Bot:
         cycle = self.state.cycle
         if day.get("status") == "alert":
             return self._report_alert(date, day, cycle)
-        if cycle and cycle.get("id") == day.get("cycle_id") and not day.get("applied"):
+        # 주문마다 확정된 것만 사이클에 더한다: 조회 실패로 남은 주문은 나중에 `report --date`로 다시 더해진다
+        unconfirmed = [e for e in day.get("orders", []) if e.get("order_id") and not e.get("final")]
+        if cycle and cycle.get("id") == day.get("cycle_id") and not day.get("applied"):  # applied: 예전 날짜별 표시
             for e in day.get("orders", []):
+                if e.get("applied") or e in unconfirmed:
+                    continue
                 key = "bought" if e["side"] == "BUY" else "sold"
                 cycle[key] = str(_d(cycle[key]) + _d(e.get("filled_amount")))
                 cycle["fees"] = str(_d(cycle["fees"]) + _d(e.get("fees")))
-            day["applied"] = True
+                e["applied"] = True
 
         h = self.toss.holding(self.symbol)
         qty = h.qty if h else ZERO
@@ -378,6 +382,15 @@ class Bot:
             completed = self._finish_cycle(cycle, date)
         self.state.save()
         self.notifier.send(self._report_message(date, day, h, cycle))
+        if unconfirmed:
+            self.notifier.send(
+                Message(
+                    f"⚠️ {self.symbol} 체결 확인 못 한 주문 {len(unconfirmed)}건 · {date[5:].replace('-', '/')}",
+                    ["토스 조회가 계속 실패해 이 주문은 사이클 매수·매도금에 아직 안 들어갔습니다.",
+                     f"토스가 정상이 되면 `python -m laoer report --date {date}` 로 다시 반영하세요."],
+                    "warn",
+                )
+            )
         if completed:
             self.notifier.send(self._cycle_message(completed))
         self._publish("report")
@@ -658,7 +671,7 @@ class Bot:
             log.warning("살아있음 갱신 실패: %s", e)
 
     def _notify_error(self, err: Exception) -> None:
-        key = str(err)[:200]
+        key = re.sub(r" \(requestId=[^)]*\)", "", str(err))[:200]  # 같은 장애는 requestId만 달라도 한 번만 알림
         now = self.clock()
         self.last_error, self.last_error_at = key, now.isoformat()
         last = self._error_sent.get(key)
