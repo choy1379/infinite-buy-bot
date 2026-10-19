@@ -294,6 +294,31 @@ class BotFlowTest(unittest.TestCase):
         bot.tick()
         self.assertIn("체결 결과", self.capture.titles()[-1])
 
+    def test_unconfirmed_fill_is_applied_later_by_report(self):
+        bot = self.make_bot()
+        self.at(2026, 10, 6, 22, 45)
+        bot.tick()
+        self.broker.close_day(D(100))
+        get_order = self.broker.get_order
+        self.broker.get_order = lambda oid: (_ for _ in ()).throw(TossError(500, "down", "장애"))
+        self.at(2026, 10, 7, 5, 30)
+        for _ in range(6):
+            bot.report("2026-10-06")
+        self.assertEqual(D(bot.state.cycle["bought"]), 0)
+        self.assertIn("체결 확인 못 한 주문 1건", self.capture.titles()[-1])
+        self.broker.get_order = get_order
+        bot.report("2026-10-06", final=True)
+        bought = D(bot.state.cycle["bought"])
+        self.assertGreater(bought, 0)
+        bot.report("2026-10-06", final=True)  # 다시 돌려도 두 번 더하지 않음
+        self.assertEqual(D(bot.state.cycle["bought"]), bought)
+
+    def test_error_alert_ignores_request_id(self):
+        bot = self.make_bot()
+        bot._notify_error(TossError(500, "down", "장애", "req-1"))
+        bot._notify_error(TossError(500, "down", "장애", "req-2"))
+        self.assertEqual(sum("오류" in t for t in self.capture.titles()), 1)
+
     def test_fx_rate_is_recorded_and_failure_is_harmless(self):
         bot = self.make_bot()
         bot.fx_rate = lambda: 1383.2
