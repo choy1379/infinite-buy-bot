@@ -412,7 +412,7 @@
 
   // ---- '다른 종목이었다면': 이번 사이클에 TECL 보유·평단이 바뀐 날마다 같은 금액을 그 종목 그날 종가로 샀다고(판 날은 같은 비율로 팔았다고) 가정
   // 종가는 GitHub Actions 가 alt-data 브랜치에 올리는 alt.json (봇과 무관). 수동 매수·매도도 보유 변화로 잡힘
-  let alt = null, heroSym = null;
+  let alt = null, heroSym = null, livePx = {};   // livePx: 봇 PC /api/market 의 실시간 시세 {종목: {price, at}}
   function whatIf(sym) {
     const px = alt && alt.closes && alt.closes[sym];
     if (!px || !secret || !data.cycle) return null;
@@ -427,9 +427,10 @@
         tq = nQ; tc = nC;
       }
     }
-    const last = Object.keys(px).sort().pop();
+    const last = Object.keys(px).sort().pop(), lv = livePx[sym];
     if (!q || !cost) return null;
-    return { rate: q * px[last] / cost - 1, pl: q * px[last] - cost, at: last };
+    const now = lv ? lv.price : px[last];
+    return { rate: q * now / cost - 1, pl: q * now - cost, at: lv ? `${kst(lv.at)} 실시간` : `${md(last)} 시세` };
   }
 
   // ---- 복호화: PBKDF2-SHA256 → HMAC-SHA256 카운터 모드 (봇의 laoer/dashboard.py 와 동일)
@@ -534,7 +535,7 @@
       <div class="stat hero"><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
       ${w ? `<div class="value mono ${sign(w.rate)}">${pct(w.rate)}</div>
         <div class="amt mono ${sign(w.pl)}">${w.pl >= 0 ? '+' : ''}${usd(w.pl)}${fx ? ` · ${w.pl >= 0 ? '+' : '-'}₩${Math.round(Math.abs(w.pl * fx)).toLocaleString('ko-KR')}` : ''}</div>
-        <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${md(w.at)} 시세 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
+        <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${w.at} 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
         <div class="value mono ${sign(rate)}">${p.hasPosition ? pct(rate) : '–'}</div>
         ${p.hasPosition ? amt : ''}
         ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
@@ -1012,8 +1013,9 @@
 
   const fmt = (v, d = 2) => num(v) === null ? '–' : num(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
   const sgn = (v, s) => num(v) === null ? '–' : `${num(v) > 0 ? '+' : ''}${s}`;
+  const isCmp = r => String(r.id || '').startsWith('cmp:');
   function renderMarket(m) {
-    const rows = m.rows || [];
+    const rows = (m.rows || []).filter(r => !isCmp(r));
     el('mkt-at').textContent = m.fetchedAt ? `${kst(m.fetchedAt)} 기준` : '';
     el('mkt').innerHTML = `<div class="table-wrap"><table aria-label="선물·환율 시세">
       <thead><tr><th>종목</th><th class="num">가격</th><th class="num">변동</th><th class="num">변동%</th><th class="num at">시간</th></tr></thead>
@@ -1039,7 +1041,10 @@
   // 전광판: 시장 탭 선물·환율 시세를 한 줄로 흘림 (같은 /api/market 응답). 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
   let fxHtml = '';
   function renderFx(m) {
-    fxHtml = (m.rows || []).filter(r => !r.error).map(r =>
+    livePx = {};
+    for (const r of m.rows || []) if (isCmp(r) && !r.error && r.price) livePx[r.id.slice(4)] = { price: r.price, at: r.at };
+    if (heroSym) renderStats();
+    fxHtml = (m.rows || []).filter(r => !r.error && !isCmp(r)).map(r =>
       `<span>${esc(r.name)} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
     renderTicker();
   }
