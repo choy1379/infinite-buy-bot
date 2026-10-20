@@ -29,6 +29,10 @@ SYMBOLS = [
     ("nq", "나스닥100 E-mini", "yahoo", "NQ=F"),
     ("usdkrw", "원/달러 환율", "yahoo", "KRW=X"),
     ("jpykrw", "원/엔 환율 (100엔)", "yahoo", "JPYKRW=X"),
+    # 대시보드 평가손익 카드 'SOXL·TQQQ 가정' 탭 실시간용 (시장 표·전광판엔 안 보임)
+    ("cmp:TECL", "TECL", "yahoo", "TECL"),
+    ("cmp:SOXL", "SOXL", "yahoo", "SOXL"),
+    ("cmp:TQQQ", "TQQQ", "yahoo", "TQQQ"),
 ]
 SCALE = {"jpykrw": 100}  # 야후는 1엔당 원이라, 흔히 보는 100엔 기준으로 바꿈
 # m.stock.naver.com 은 robots.txt 가 전체 금지라 쓰지 않음. polling.finance.naver.com 은 규칙 없음
