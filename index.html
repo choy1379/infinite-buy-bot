@@ -267,7 +267,7 @@
   .more > summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; margin-top: 10px; }
   /* 첫 화면 정리: 빈 알림 칸이 만들던 틈 제거, 상태·환율 한 묶음, 넓은 화면은 T값·사이클·다음 주문 한 줄, 계좌 행은 이름 아래 보유·평단·현재 */
   #notice:empty { display: none; }
-  /* 전광판: 환율 + 다음 주문이 오른쪽에서 왼쪽으로 계속 흐름 (마우스 올리면 멈춤) */
+  /* 전광판: 선물·환율 시세가 오른쪽에서 왼쪽으로 계속 흐름 (마우스 올리면 멈춤) */
   .ticker { margin: -12px 0 0; overflow: hidden; font-size: 0.88rem; color: var(--muted); white-space: nowrap;
     mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
   .ticker .track { display: inline-flex; animation: marquee var(--dur, 30s) linear infinite; }
@@ -310,7 +310,7 @@
   </div>
 
   <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
-  <div class="ticker mono" id="ticker" aria-label="환율과 다음 주문" hidden><div class="track" id="track"></div></div>
+  <div class="ticker mono" id="ticker" aria-label="선물·환율 시세" hidden><div class="track" id="track"></div></div>
   <div id="notice"></div>
 
   <div class="cols">
@@ -999,25 +999,15 @@
       { id: 'jpykrw', name: '원/엔 환율 (100엔)', price: 935.12, change: -1.48, pct: -0.16, at: at('22:39') },
     ] };
   }
-  // 메인 탭 한 줄 환율 (같은 /api/market 응답에서 꺼냄)
-  const FX = [['usdkrw', '원/달러'], ['jpykrw', '원/100엔']];
+  // 전광판: 시장 탭 선물·환율 시세를 한 줄로 흘림 (같은 /api/market 응답). 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
+  let fxHtml = '';
   function renderFx(m) {
-    const rows = Object.fromEntries((m.rows || []).map(r => [r.id, r]));
-    const items = FX.map(([id, label]) => rows[id] && !rows[id].error && [label, rows[id]]).filter(Boolean);
-    fxHtml = items.map(([label, r]) =>
-      `<span>${label} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
+    fxHtml = (m.rows || []).filter(r => !r.error).map(r =>
+      `<span>${esc(r.name)} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
     renderTicker();
   }
-  // 전광판 한 줄: 환율 + 다음 주문 계획 요약. 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
-  let fxHtml = '';
   function renderTicker() {
-    const n = data && data.nextPlan, ns = data && data.nextSession, sp = secret && secret.nextPlan;
-    const legs = n ? (n.orders || []).map((o, i) => {
-      const so = sp && sp.orders ? sp.orders[i] : null;
-      return `<span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span> ${o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg)}${so ? ` <b>${so.qty}주 ${usd(so.price)}</b>` : ''}`;
-    }) : [];
-    const next = n ? `<a href="#next"><b>다음 주문</b> ${ns && ns.date === n.date ? kst(ns.orderAt) : md(n.date)}${legs.length ? ' · ' + legs.join(' · ') : ' · 낼 주문 없음'}</a>` : '';
-    const one = fxHtml + (next ? `<span>${next}</span>` : '');
+    const one = fxHtml;
     const box = el('ticker'), track = el('track');
     box.hidden = !one;
     if (!one || track.dataset.html === one) return;
@@ -1145,7 +1135,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderTicker(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderDays(); renderHistory();
   }
 
   async function load() {
