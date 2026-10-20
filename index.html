@@ -284,6 +284,11 @@
     .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .stat.span { grid-column: auto; }
   }
+  /* 상태는 오른쪽 위 밝게 보기 옆에 작은 표시만 (자세한 갱신 시각은 마우스 올리면) */
+  .topr { display: flex; align-items: center; gap: 8px; flex: none; }
+  .topr .pill { cursor: default; }
+  .pill.ok::before { display: block; }
+  .ticker { margin-top: 0; }
   @media (min-width: 560px) {
     .acct .row { row-gap: 6px; }
     .acct .row > .rt { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
@@ -295,7 +300,8 @@
 <main>
   <div class="top">
     <h1>TECL 무한매수<small id="subtitle">라오어 무한매수법 · 토스증권 자동매매</small></h1>
-    <button type="button" class="ghost theme" id="theme-btn" aria-label="화면 밝기 바꾸기"></button>
+    <div class="topr"><div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
+      <button type="button" class="ghost theme" id="theme-btn" aria-label="화면 밝기 바꾸기"></button></div>
   </div>
 
   <div class="tabs" role="tablist" aria-label="화면">
@@ -304,7 +310,6 @@
   </div>
 
   <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
-  <div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
   <div class="ticker mono" id="ticker" aria-label="환율과 다음 주문" hidden><div class="track" id="track"></div></div>
   <div id="notice"></div>
 
@@ -467,7 +472,9 @@
     let pill = '<span class="pill ok">봇 동작 중</span>';
     if (data.bot && data.bot.lastError) pill = '<span class="pill bad">오류 발생</span>';
     else if (stale) pill = '<span class="pill warn">소식 없음</span>';
-    el('status').innerHTML = `${pill}<span>${esc(data.mode)} · 마지막 갱신 <span class="mono">${kst(data.updatedAt)}</span> (${ago(data.updatedAt)})</span>`;
+    const mode = (String(data.mode).match(/\(([^)]+)\)/) || [])[1] || data.mode;   // '실거래(LIVE)' → 'LIVE'
+    if (pill.includes('ok')) pill = `<span class="pill ok">${esc(mode)}</span>`;
+    el('status').innerHTML = pill.replace('<span', `<span title="${esc(data.mode)} · 마지막 갱신 ${kst(data.updatedAt)} (${ago(data.updatedAt)})"`);
     let notice = '';
     if (data.bot && data.bot.lastError) notice = `<div class="notice bad">봇 오류 (${kst(data.bot.lastErrorAt)}): ${esc(data.bot.lastError)}</div>`;
     else if (stale) notice = `<div class="notice warn">${Math.floor((Date.now() - new Date(data.updatedAt)) / 3600000)}시간째 갱신이 없어요. 봇 PC가 꺼졌거나 절전 중일 수 있어요.</div>`;
