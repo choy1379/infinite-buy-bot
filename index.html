@@ -267,7 +267,19 @@
   .more > summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; margin-top: 10px; }
   /* 첫 화면 정리: 빈 알림 칸이 만들던 틈 제거, 상태·환율 한 묶음, 넓은 화면은 T값·사이클·다음 주문 한 줄, 계좌 행은 이름 아래 보유·평단·현재 */
   #notice:empty { display: none; }
-  .fx { margin: -12px 0 0; }
+  /* 전광판: 환율 + 다음 주문이 오른쪽에서 왼쪽으로 계속 흐름 (마우스 올리면 멈춤) */
+  .ticker { margin: -12px 0 0; overflow: hidden; font-size: 0.88rem; color: var(--muted); white-space: nowrap;
+    mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+  .ticker .track { display: inline-flex; animation: marquee var(--dur, 30s) linear infinite; }
+  .ticker:hover .track { animation-play-state: paused; }
+  .ticker .run { display: inline-flex; gap: 28px; padding-right: 28px; }
+  .ticker b { color: var(--ink); font-weight: 600; }
+  .ticker a { color: inherit; text-decoration: none; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .ticker { white-space: normal; mask-image: none; }
+    .ticker .track { animation: none; } .ticker .run { flex-wrap: wrap; gap: 4px 18px; } .ticker .run + .run { display: none; }
+  }
   @media (min-width: 1000px) {
     .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .stat.span { grid-column: auto; }
@@ -293,7 +305,7 @@
 
   <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
   <div class="status" id="status"><span class="pill idle">불러오는 중</span></div>
-  <div class="fx mono" id="fx" aria-label="실시간 환율" hidden></div>
+  <div class="ticker mono" id="ticker" aria-label="환율과 다음 주문" hidden><div class="track" id="track"></div></div>
   <div id="notice"></div>
 
   <div class="cols">
@@ -985,9 +997,27 @@
   function renderFx(m) {
     const rows = Object.fromEntries((m.rows || []).map(r => [r.id, r]));
     const items = FX.map(([id, label]) => rows[id] && !rows[id].error && [label, rows[id]]).filter(Boolean);
-    el('fx').hidden = !items.length;
-    el('fx').innerHTML = items.map(([label, r]) =>
+    fxHtml = items.map(([label, r]) =>
       `<span>${label} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
+    renderTicker();
+  }
+  // 전광판 한 줄: 환율 + 다음 주문 계획 요약. 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
+  let fxHtml = '';
+  function renderTicker() {
+    const n = data && data.nextPlan, ns = data && data.nextSession, sp = secret && secret.nextPlan;
+    const legs = n ? (n.orders || []).map((o, i) => {
+      const so = sp && sp.orders ? sp.orders[i] : null;
+      return `<span class="side ${o.side}">${o.side === 'BUY' ? '매수' : '매도'}</span> ${o.leg.startsWith('extra') ? '추가LOC' : (LEG[o.leg] || o.leg)}${so ? ` <b>${so.qty}주 ${usd(so.price)}</b>` : ''}`;
+    }) : [];
+    const next = n ? `<a href="#next"><b>다음 주문</b> ${ns && ns.date === n.date ? kst(ns.orderAt) : md(n.date)}${legs.length ? ' · ' + legs.join(' · ') : ' · 낼 주문 없음'}</a>` : '';
+    const one = fxHtml + (next ? `<span>${next}</span>` : '');
+    const box = el('ticker'), track = el('track');
+    box.hidden = !one;
+    if (!one || track.dataset.html === one) return;
+    track.dataset.html = one;
+    track.innerHTML = `<div class="run">${one}</div><div class="run" aria-hidden="true" inert>${one}</div>`;
+    const sec = Math.max(12, track.firstChild.offsetWidth / 50);   // 초당 약 50px
+    if (Math.abs(sec - (parseFloat(track.style.getPropertyValue('--dur')) || 0)) > 2) track.style.setProperty('--dur', `${sec.toFixed(0)}s`);   // 값만 조금 바뀔 땐 속도 그대로 (위치 튐 방지)
   }
   async function pollMarket() {
     clearTimeout(mktTimer);
@@ -1001,7 +1031,7 @@
       renderFx(m);
       if (marketOpen()) renderMarket(m);
     } catch (e) {
-      el('fx').hidden = true;
+      fxHtml = ''; renderTicker();
       if (!marketOpen()) { mktTimer = setTimeout(pollMarket, MKT_MS); return; }
       if (!el('mkt').querySelector('table'))
         el('mkt').innerHTML = '<div class="err">선물 시세는 봇이 도는 PC(또는 같은 와이파이의 PC IP:8765)에서 열었을 때 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
@@ -1108,7 +1138,7 @@
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
-    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderDays(); renderHistory();
+    renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderTicker(); renderDays(); renderHistory();
   }
 
   async function load() {
