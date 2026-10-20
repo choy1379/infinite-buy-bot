@@ -1,0 +1,32 @@
+name: 비교 종목 시세 올리기
+
+on:
+  schedule:
+    # UTC 기준 평일. 미국 장중 매시 + 장 마감 뒤 한 번 (대시보드 'SOXL·TQQQ였다면' 비교용)
+    - cron: "10 13-20 * * 1-5"
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  alt-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 야후 일봉 받기
+        run: mkdir out && python -m laoer.altprices out/alt.json
+      - name: alt-data 브랜치에 커밋 1개로 덮어쓰기
+        working-directory: out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b alt-data
+          git add alt.json
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "alt prices"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" alt-data

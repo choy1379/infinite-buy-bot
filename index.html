@@ -261,6 +261,9 @@
   @media (max-width: 420px) { .stat.hero .value { font-size: 2.1rem; } }
   .stat.hero .amt { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
   .stat.hero .bar { margin: 10px 0 6px; }
+  .stat.hero .hl { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tabs.mini { padding: 3px; border-radius: 10px; }
+  .tabs.mini button { padding: 4px 10px; font-size: 0.78rem; border-radius: 8px; }
   .fold > summary .fsum { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
   .fold > summary:has(.fsum)::after { margin-left: 0; }
   .card > .fold:not([open]) > summary { margin-bottom: 0; }
@@ -398,13 +401,35 @@
   const ago = iso => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`; };
   const md = d => d ? d.slice(5).replace('-', '/') : '';
 
-  function source() {
+  function source(branch = BRANCH, file = 'dashboard.json') {
     const q = new URLSearchParams(location.search).get('src');
-    if (q) return q;
+    if (q && file === 'dashboard.json') return q;
     const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
     const repo = location.pathname.split('/').filter(Boolean)[0];
-    if (m && repo) return `https://raw.githubusercontent.com/${m[1]}/${repo}/${BRANCH}/dashboard.json`;
-    return 'dashboard.json';
+    if (m && repo) return `https://raw.githubusercontent.com/${m[1]}/${repo}/${branch}/${file}`;
+    return file;
+  }
+
+  // ---- '다른 종목이었다면': 이번 사이클에 TECL 보유·평단이 바뀐 날마다 같은 금액을 그 종목 그날 종가로 샀다고(판 날은 같은 비율로 팔았다고) 가정
+  // 종가는 GitHub Actions 가 alt-data 브랜치에 올리는 alt.json (봇과 무관). 수동 매수·매도도 보유 변화로 잡힘
+  let alt = null, heroSym = null;
+  function whatIf(sym) {
+    const px = alt && alt.closes && alt.closes[sym];
+    if (!px || !secret || !data.cycle) return null;
+    const days = (secret.days || []).filter(d => d.date >= data.cycle.started).sort((a, b) => a.date < b.date ? -1 : 1);
+    let q = 0, cost = 0, tq = 0, tc = 0;   // q·cost: 가정 종목, tq·tc: 직전 TECL 수량·매입금액
+    for (const d of days) {
+      for (const [nq, na] of [[d.qtyBefore, d.avgBefore], [d.qtyAfter, d.avgAfter]]) {
+        if (num(nq) === null) continue;
+        const nQ = num(nq), nC = nQ * (num(na) ?? (tq ? tc / tq : 0));   // 평단이 비면 직전 평단
+        if (nQ > tq) { if (!px[d.date]) return null; q += (nC - tc) / px[d.date]; cost += nC - tc; }
+        else if (nQ < tq) { q *= nQ / tq; cost *= nQ / tq; }
+        tq = nQ; tc = nC;
+      }
+    }
+    const last = Object.keys(px).sort().pop();
+    if (!q || !cost) return null;
+    return { rate: q * px[last] / cost - 1, pl: q * px[last] - cost, at: last };
   }
 
   // ---- 복호화: PBKDF2-SHA256 → HMAC-SHA256 카운터 모드 (봇의 laoer/dashboard.py 와 동일)
@@ -489,6 +514,11 @@
     const ns = data.nextSession;
     const c = data.cycle;
     // 잠금 해제 시: 계좌 실시간 값이 있으면 그걸로 (30초마다), 없으면 올려둔 보유·현재가로
+    const syms = alt && secret && data.cycle ? ['SOXL', 'TQQQ'].filter(s => s !== data.symbol && whatIf(s)) : [];
+    if (!syms.includes(heroSym)) heroSym = null;
+    const w = heroSym && whatIf(heroSym), wBase = w && whatIf(data.symbol);
+    const tabs = syms.length && p.hasPosition ? `<div class="tabs mini" role="tablist" aria-label="비교 종목">${[null, ...syms].map(s =>
+      `<button type="button" role="tab" data-sym="${s || ''}" aria-selected="${s === heroSym}">${s || esc(data.symbol)}</button>`).join('')}</div>` : '';
     const live = secret && (secret.account || []).find(it => String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase());
     const h = secret && secret.holding;
     const rate = live ? num(live.plRate) : num(p.plRate);
@@ -501,11 +531,14 @@
       : toGo <= 0 ? `목표 +${esc(data.targetPct)}% 도달 · ¾ 익절 주문 나감` : `목표 +${esc(data.targetPct)}%까지 ${toGo.toFixed(2)}%p 남음 · 닿으면 ¾ 익절`;
     const gPct = toGo === null ? 0 : Math.max(0, Math.min(100, now / tgt * 100));
     el('stats').innerHTML = `
-      <div class="stat hero"><div class="label">평가손익</div>
+      <div class="stat hero"><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
+      ${w ? `<div class="value mono ${sign(w.rate)}">${pct(w.rate)}</div>
+        <div class="amt mono ${sign(w.pl)}">${w.pl >= 0 ? '+' : ''}${usd(w.pl)}${fx ? ` · ${w.pl >= 0 ? '+' : '-'}₩${Math.round(Math.abs(w.pl * fx)).toLocaleString('ko-KR')}` : ''}</div>
+        <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${md(w.at)} 시세 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
         <div class="value mono ${sign(rate)}">${p.hasPosition ? pct(rate) : '–'}</div>
         ${p.hasPosition ? amt : ''}
         ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
-        <div class="sub">${goal}</div></div>
+        <div class="sub">${goal}</div></div>`}
       <div class="stat"><div class="label">T값 (${splits}분할)</div>
         <div class="value mono">${t === null ? '0' : t.toFixed(2)}<span class="muted" style="font-size:.9rem"> / ${splits}</span></div>
         <div class="bar ${t !== null && t >= splits / 2 ? 'half' : ''}" role="img" aria-label="자금 사용 ${tPct.toFixed(0)}%"><span style="width:${tPct}%"></span></div>
@@ -941,6 +974,10 @@
     pollMarket();
   }
   for (const t of ['bot', 'market']) el(`tabbtn-${t}`).addEventListener('click', () => showTab(t, true));
+  el('stats').addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-sym]');
+    if (b) { heroSym = b.dataset.sym || null; renderStats(); }
+  });
 
   const dark = () => document.documentElement.dataset.theme === 'dark' ||
     (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -1132,6 +1169,16 @@
     };
   }
 
+  function demoAlt() {   // 가짜 TECL 종가를 비틀어 만든 모의 SOXL·TQQQ
+    const closes = { TECL: {}, SOXL: {}, TQQQ: {} };
+    for (const d of secret.days) {
+      closes.TECL[d.date] = num(d.close);
+      closes.SOXL[d.date] = Math.round(Math.pow(num(d.close) / 92, 1.4) * 3000) / 100;
+      closes.TQQQ[d.date] = Math.round(Math.pow(num(d.close) / 92, 0.7) * 8000) / 100;
+    }
+    return { closes };
+  }
+
   function render() {
     if (!data) return;
     el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
@@ -1140,7 +1187,7 @@
 
   async function load() {
     if (DEMO) {
-      if (!data) { const d = demoData(); data = d.public; secret = d.secret; }
+      if (!data) { const d = demoData(); data = d.public; secret = d.secret; alt = demoAlt(); }
       render();
       el('lock').hidden = true;
       el('notice').innerHTML = '<div class="notice warn">가짜 데이터로 보는 중이에요 (모의 매매 결과). 실제 화면은 주소에서 <span class="mono">?demo=1</span> 을 지우세요.</div>';
@@ -1150,6 +1197,10 @@
       const res = await fetch(`${source()}${source().includes('?') ? '&' : '?'}t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       data = await res.json();
+      try {   // 비교 종가는 없어도 나머지 화면은 그대로
+        const ar = await fetch(`${source('alt-data', 'alt.json')}?t=${Date.now()}`, { cache: 'no-store' });
+        if (ar.ok) alt = await ar.json();
+      } catch (e) {}
       if (password && data.secret) await unlock(password, true);
       else if (!password) {
         let saved = null;
