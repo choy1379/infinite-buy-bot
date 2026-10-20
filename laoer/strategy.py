@@ -83,16 +83,6 @@ class PlannedOrder:
     price: Decimal
     qty: int
 
-    @property
-    def amount(self) -> Decimal:
-        return self.price * self.qty
-
-    @property
-    def label(self) -> str:
-        if self.leg.startswith("extra"):
-            return "추가LOC"
-        return LEG_LABELS.get(self.leg, self.leg)
-
 
 @dataclass
 class Plan:

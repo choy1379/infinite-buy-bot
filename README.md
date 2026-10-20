@@ -72,7 +72,6 @@
 | `check.cmd` | 알림 테스트 + 상태 + 다음 장 주문 미리보기 |
 | `start.cmd` / `stop.cmd` | 봇을 백그라운드로 시작 / 중지 (로그: `state\bot.log`) |
 | `autostart-on.cmd` / `autostart-off.cmd` | 윈도우 로그인 시 자동 시작 켜기 / 끄기 |
-| `wake-task-on.cmd` / `wake-task-off.cmd` | 절전 중이어도 매일 22:50·23:50·05:30·06:30에 PC를 깨워 봇 재시작 (조용히) |
 
 ## 설치 · 설정
 
@@ -158,7 +157,7 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 | 동작 | 봇 |
 |---|---|
 | 잠금(`Ctrl+Alt+Del` → 잠금) / 화면 꺼짐 | ✅ 계속 동작 |
-| 절전 | `wake-task-on.cmd` 를 실행해 두면 매일 22:50·23:50·05:30·06:30 에 PC를 깨워 처리 |
+| 절전 | ❌ 멈춤 (절전은 끄세요, 아래 참고) |
 | 로그아웃 / 시스템 종료 | ❌ 멈춤 (다시 로그인하면 `autostart-on.cmd` 로 자동 시작) |
 
 - 전원 옵션의 "컴퓨터를 절전 모드로 설정"은 **해당 없음**으로 두세요 (`powercfg /change standby-timeout-ac 0`).
@@ -170,11 +169,11 @@ order_offset_minutes = -60   # 선택: 정규장 1시간 전에 미리 알림 �
 봇의 기억은 전부 `config.toml`(설정·키)과 `state\` 폴더(사이클 기록·오늘 주문 기록·토큰)에 있습니다.
 이 둘만 옮기면 그대로 이어서 돕니다.
 
-1. 기존 PC에서 `stop.cmd` (그리고 쓰고 있었다면 `wake-task-off.cmd`, `autostart-off.cmd`)
+1. 기존 PC에서 `stop.cmd` (그리고 쓰고 있었다면 `autostart-off.cmd`)
 2. 새 PC에서 `git clone https://github.com/choy1379/infinite-buy-bot.git`
 3. 기존 PC의 **`config.toml` 과 `state` 폴더**를 새 폴더에 복사
 4. 새 PC의 IP를 토스 개발자센터 허용 IP에 추가
-5. `check.cmd` 로 상태가 전과 같은지 확인 → `start.cmd` (필요하면 `wake-task-on.cmd`, `autostart-on.cmd`)
+5. `check.cmd` 로 상태가 전과 같은지 확인 → `start.cmd` (필요하면 `autostart-on.cmd`)
 
 ⚠️ **봇은 한 대에서만 돌리세요.** 두 PC에서 동시에 `start.cmd` 를 켜면 서로의 기록을 몰라서 **같은 주문을 두 번** 넣습니다.
 다른 PC에서는 `check.cmd`·`plan`·`dashboard` 처럼 조회만 하는 명령까지만 쓰세요
