@@ -96,7 +96,7 @@ def start_live(cfg: Config, bot: Bot, *, port: int | None = None, serve: bool = 
     url = f"https://raw.githubusercontent.com/{dash.repo}/{dash.branch}/dashboard.json" if dash else None
     try:
         account = live_account_fetcher(bot.toss, dash.password) if dash else None
-        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url, account=account)
+        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url, account=account, market=Market(toss=bot.toss))
     except OSError as e:  # 포트가 이미 쓰이는 중 등 — 봇은 그대로 돈다
         log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
         return None
@@ -134,8 +134,13 @@ def cmd_kakao_login(cfg: Config) -> int:
     return 0
 
 
-def cmd_market() -> int:
-    rows = Market().snapshot()["rows"]
+def cmd_market(config: str) -> int:
+    try:  # 설정이 있으면 봇과 똑같이 토스 현재가로, 없으면 야후로
+        cfg = load_config(config)
+        toss = TossClient(cfg.toss.client_id, cfg.toss.client_secret, base_url=cfg.toss.base_url, token_path=cfg.run.state_dir / "toss_token.json", account_seq=cfg.toss.account_seq)
+    except Exception:
+        toss = None
+    rows = Market(toss=toss).snapshot()["rows"]
     for r in rows:
         if "error" in r:
             print(f"✗ {r['name']}: {r['error']}")
@@ -214,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("text", nargs="+", help="보낼 문구 (첫 줄이 제목, 여러 단어는 따옴표로 묶기)")
     p.add_argument("--level", choices=["info", "success", "warn", "error"], default="info")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
-    sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
+    sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 없으면 야후만)")
     p = sub.add_parser("realized", help="봇 밖에서 판 종목의 실현 손익을 기록하고 보여줌")
     p.add_argument("--days", type=int, default=14, help="최근 며칠의 종료 주문을 볼지 (기본 14)")
     p.add_argument("--raw", action="store_true", help="기록하지 않고 종료된 주문을 그대로 나열 (토스 앱 주문이 목록에 나오는지 확인용)")
@@ -228,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
             pass
 
     if args.cmd == "market":
-        return cmd_market()
+        return cmd_market(args.config)
 
     try:
         cfg = load_config(args.config, require_toss=args.cmd not in ("notify", "notify-test", "kakao-login"))

@@ -141,3 +141,25 @@ class SnapshotTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TossQuoteTest(unittest.TestCase):
+    class Toss:
+        def __init__(self, fail=False):
+            self.fail = fail
+
+        def quote(self, symbol):
+            if self.fail:
+                raise OSError("toss down")
+            return {"symbol": symbol, "timestamp": "2026-10-20T15:14:09.000+09:00", "lastPrice": "94.36", "currency": "USD"}
+
+    def test_cmp_rows_use_toss_last_price(self):
+        rows = {r["id"]: r for r in Market(opener=FakeOpener({}), toss=self.Toss()).snapshot()["rows"]}
+        self.assertEqual(rows["cmp:SOXL"]["price"], 94.36)
+        self.assertEqual(rows["cmp:SOXL"]["at"], "2026-10-20T15:14:09+09:00")
+
+    def test_toss_failure_or_missing_falls_back_to_yahoo(self):
+        opener = FakeOpener({"chart/SOXL": YAHOO})
+        for toss in (self.Toss(fail=True), None):
+            rows = {r["id"]: r for r in Market(opener=opener, toss=toss).snapshot()["rows"]}
+            self.assertEqual(rows["cmp:SOXL"]["price"], 90.55)

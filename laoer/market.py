@@ -30,9 +30,10 @@ SYMBOLS = [
     ("usdkrw", "원/달러 환율", "yahoo", "KRW=X"),
     ("jpykrw", "원/엔 환율 (100엔)", "yahoo", "JPYKRW=X"),
     # 대시보드 평가손익 카드 'SOXL·TQQQ 가정' 탭 실시간용 (시장 표·전광판엔 안 보임)
-    ("cmp:TECL", "TECL", "yahoo", "TECL"),
-    ("cmp:SOXL", "SOXL", "yahoo", "SOXL"),
-    ("cmp:TQQQ", "TQQQ", "yahoo", "TQQQ"),
+    # 토스 현재가는 프리·데이·애프터장까지 따라감. 토스가 없거나 실패하면 야후 정규장 가격
+    ("cmp:TECL", "TECL", "toss", "TECL"),
+    ("cmp:SOXL", "SOXL", "toss", "SOXL"),
+    ("cmp:TQQQ", "TQQQ", "toss", "TQQQ"),
 ]
 SCALE = {"jpykrw": 100}  # 야후는 1엔당 원이라, 흔히 보는 100엔 기준으로 바꿈
 # m.stock.naver.com 은 robots.txt 가 전체 금지라 쓰지 않음. polling.finance.naver.com 은 규칙 없음
@@ -126,8 +127,9 @@ def parse_prober(body: dict, base: float | None) -> dict:
 
 
 class Market:
-    def __init__(self, symbols=SYMBOLS, opener=None, timeout: float = 6.0, clock=time.monotonic, now=None):
+    def __init__(self, symbols=SYMBOLS, opener=None, timeout: float = 6.0, clock=time.monotonic, now=None, toss=None):
         self.symbols = symbols
+        self.toss = toss  # TossClient (quote 만 씀). 없으면 'toss' 종목은 야후로
         self.opener = opener or urllib.request.build_opener()
         self.timeout = timeout
         self.clock = clock
@@ -141,6 +143,14 @@ class Market:
             return json.loads(r.read().decode("utf-8"))
 
     def quote(self, source: str, code: str) -> dict:
+        if source == "toss":
+            if self.toss:
+                try:
+                    q = self.toss.quote(code)
+                    return {"price": float(q["lastPrice"]), "change": None, "pct": None, "at": _iso(datetime.fromisoformat(q["timestamp"]))}
+                except Exception as e:
+                    log.debug("토스 시세 %s 실패, 야후로: %s", code, e)
+            source = "yahoo"
         if source == "yahoo":
             return parse_yahoo(self._get(YAHOO_URL.format(code=urllib.parse.quote(code))))
         err: Exception | None = None
