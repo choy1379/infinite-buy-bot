@@ -265,6 +265,18 @@
   .fold > summary:has(.fsum)::after { margin-left: 0; }
   .card > .fold:not([open]) > summary { margin-bottom: 0; }
   .more > summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; margin-top: 10px; }
+  /* 첫 화면 정리: 빈 알림 칸이 만들던 틈 제거, 상태·환율 한 묶음, 넓은 화면은 T값·사이클·다음 주문 한 줄, 계좌 행은 이름 아래 보유·평단·현재 */
+  #notice:empty { display: none; }
+  .fx { margin: -12px 0 0; }
+  @media (min-width: 1000px) {
+    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .stat.span { grid-column: auto; }
+  }
+  @media (min-width: 560px) {
+    .acct .row { row-gap: 6px; }
+    .acct .row > .rt { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+    .acct .det { grid-column: 2; margin-top: 0; }
+  }
 </style>
 </head>
 <body>
@@ -481,10 +493,10 @@
         <div class="sub">${phase}</div></div>
       <div class="stat"><div class="label">사이클</div>
         <div class="value">${c ? `#${c.id}` : '–'}</div>
-        <div class="sub">${c ? `${esc(c.started)} 시작 · ${c.tradingDays}거래일째` : '다음 장에 새로 시작'}</div></div>
+        <div class="sub">${c ? `${md(c.started)} 시작 · ${c.tradingDays}거래일째` : '다음 장에 새로 시작'}</div></div>
       <div class="stat span"><div class="label">다음 주문</div>
         <div class="value mono" style="font-size:1.15rem">${ns ? kst(ns.orderAt) : '–'}</div>
-        <div class="sub">${ns ? `정규장 ${kst(ns.start)} ~ ${kst(ns.end).split(' ').pop()} (한국시간)` : ''}</div></div>`;
+        <div class="sub">${ns ? `정규장 ${kst(ns.start).split(' ').pop()} ~ ${kst(ns.end).split(' ').pop()}` : ''}</div></div>`;
   }
 
   function renderSecret() {
