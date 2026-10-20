@@ -141,3 +141,19 @@ class SnapshotTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TossCmpTest(unittest.TestCase):
+    def test_cmp_rows_use_toss_and_fall_back_to_yahoo(self):
+        class Toss:
+            def quote(self, sym):
+                if sym == "TQQQ":
+                    raise OSError("429")
+                return {"symbol": sym, "lastPrice": "193.14", "timestamp": "2026-10-20T06:14:00Z"}
+
+        opener = FakeOpener({"/TQQQ?": YAHOO})
+        rows = {r["id"]: r for r in Market(opener=opener, toss=Toss()).snapshot()["rows"]}
+        self.assertEqual(rows["cmp:TECL"]["price"], 193.14)
+        self.assertEqual(rows["cmp:TECL"]["at"], "2026-10-20T15:14:00+09:00")
+        self.assertEqual(rows["cmp:TQQQ"]["price"], 90.55)  # 토스 실패 → 야후
+        self.assertFalse(any("/TECL?" in u for u in opener.urls))

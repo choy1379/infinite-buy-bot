@@ -5,7 +5,7 @@ GitHub Pages 페이지는 봇이 몇 시간마다 올리는 파일만 볼 수 �
   /                -> index.html (GitHub Pages 와 같은 페이지)
   /dashboard.json  -> GitHub 의 dashboard.json 을 대신 받아 전달 (30초 캐시)
   /api/orderbook   -> 토스 GET /api/v1/orderbook (1초 캐시: 여러 기기가 봐도 토스 호출은 초당 1회)
-  /api/market      -> '시장' 탭 선물 시세 (네이버/야후, 10초 캐시, laoer/market.py)
+  /api/market      -> '시장' 탭 선물 시세 + 가정 탭 종목가(네이버/야후/토스, 10초 캐시, laoer/market.py)
   /api/account     -> 계좌 전체 보유(대시보드 비밀번호로 암호화한 상태로만, 30초 캐시)
 를 제공한다. 페이지는 /api/orderbook 이 응답하면 '실시간 호가' 칸을 보여준다.
 GitHub Pages 페이지도 이 PC의 브라우저에서는 http://localhost:8765/api/orderbook 을 부를 수 있게

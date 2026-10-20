@@ -96,7 +96,7 @@ def start_live(cfg: Config, bot: Bot, *, port: int | None = None, serve: bool = 
     url = f"https://raw.githubusercontent.com/{dash.repo}/{dash.branch}/dashboard.json" if dash else None
     try:
         account = live_account_fetcher(bot.toss, dash.password) if dash else None
-        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url, account=account)
+        srv = LiveServer(bot.toss, cfg.symbol, host=cfg.live.host, port=port, dashboard_url=url, account=account, market=Market(toss=bot.toss))
     except OSError as e:  # 포트가 이미 쓰이는 중 등 — 봇은 그대로 돈다
         log.warning("실시간 호가 페이지를 못 띄웠습니다 (포트 %s): %s", port, e)
         return None
