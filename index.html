@@ -44,6 +44,7 @@
   body {
     background: var(--bg); color: var(--ink);
     font: 15px/1.6 var(--font-body);
+    word-break: keep-all; overflow-wrap: break-word;   /* 한글이 단어 중간에서 줄바꿈되지 않게 */
     padding: 0 16px;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -258,6 +259,12 @@
   .acct .bot { border: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); }
   .empty { border: 0; }
   @media (max-width: 420px) { .stat.hero .value { font-size: 2.1rem; } }
+  .stat.hero .amt { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
+  .stat.hero .bar { margin: 10px 0 6px; }
+  .fold > summary .fsum { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fold > summary:has(.fsum)::after { margin-left: 0; }
+  .card > .fold:not([open]) > summary { margin-bottom: 0; }
+  .more > summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -309,10 +316,7 @@
     <div id="days" style="display:grid;gap:12px"></div>
   </section>
 
-  <section>
-    <h2>완료한 사이클</h2>
-    <div id="history"></div>
-  </section>
+  <section id="history"></section>
   </div>
   </div>
 
@@ -453,10 +457,24 @@
     const phase = t === null ? '보유 없음' : t >= splits - 1 ? '소진' : t < splits / 2 ? '전반전' : '후반전';
     const ns = data.nextSession;
     const c = data.cycle;
+    // 잠금 해제 시: 계좌 실시간 값이 있으면 그걸로 (30초마다), 없으면 올려둔 보유·현재가로
+    const live = secret && (secret.account || []).find(it => String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase());
+    const h = secret && secret.holding;
+    const rate = live ? num(live.plRate) : num(p.plRate);
+    const plUsd = live ? num(live.pl) : h ? num(h.qty) * (num(secret.price) - num(h.avg)) : null;
+    const fx = secret ? num(secret.fx) : null;
+    const amt = plUsd === null || Number.isNaN(plUsd) ? '' : `<div class="amt mono ${sign(plUsd)}">${plUsd >= 0 ? '+' : ''}${usd(plUsd)}${fx ? ` · ${plUsd >= 0 ? '+' : '-'}₩${Math.round(Math.abs(plUsd * fx)).toLocaleString('ko-KR')}` : ''}</div>`;
+    const tgt = num(data.targetPct), now = rate === null ? null : rate * 100;
+    const toGo = tgt !== null && now !== null ? tgt - now : null;
+    const goal = toGo === null ? `목표 +${esc(data.targetPct)}%에서 ¾ 익절`
+      : toGo <= 0 ? `목표 +${esc(data.targetPct)}% 도달 · ¾ 익절 주문 나감` : `목표 +${esc(data.targetPct)}%까지 ${toGo.toFixed(2)}%p 남음 · 닿으면 ¾ 익절`;
+    const gPct = toGo === null ? 0 : Math.max(0, Math.min(100, now / tgt * 100));
     el('stats').innerHTML = `
       <div class="stat hero"><div class="label">평가손익</div>
-        <div class="value mono ${sign(p.plRate)}">${p.hasPosition ? pct(p.plRate) : '–'}</div>
-        <div class="sub">목표 +${esc(data.targetPct)}%에서 ¾ 익절</div></div>
+        <div class="value mono ${sign(rate)}">${p.hasPosition ? pct(rate) : '–'}</div>
+        ${p.hasPosition ? amt : ''}
+        ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
+        <div class="sub">${goal}</div></div>
       <div class="stat"><div class="label">T값 (${splits}분할)</div>
         <div class="value mono">${t === null ? '0' : t.toFixed(2)}<span class="muted" style="font-size:.9rem"> / ${splits}</span></div>
         <div class="bar ${t !== null && t >= splits / 2 ? 'half' : ''}" role="img" aria-label="자금 사용 ${tPct.toFixed(0)}%"><span style="width:${tPct}%"></span></div>
@@ -475,21 +493,15 @@
     box.hidden = false;
     const h = secret.holding, c = secret.cycle || {};
     const value = h ? num(h.qty) * num(h.lastPrice) : null;
-    const used = num(c.bought) !== null && num(c.seed) ? num(c.bought) - num(c.sold || 0) : null;
     box.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
         <h2 style="margin:0">금액 정보</h2><button class="ghost" id="relock" type="button">다시 잠그기</button></div>
       <dl class="kv">
-        <div><dt>보유</dt><dd class="mono">${h ? qty(h.qty) + '주' : '0주'}</dd></div>
-        <div><dt>평단</dt><dd class="mono">${h ? usd(h.avg) : '–'}</dd></div>
-        <div><dt>현재가</dt><dd class="mono">${usd(secret.price)}</dd></div>
+        <div><dt>보유</dt><dd class="mono">${h ? `${qty(h.qty)}주 · 평단 ${usd(h.avg)}` : '0주'}</dd></div>
         <div><dt>평가금액</dt><dd class="mono">${value === null ? '–' : usd(value)}</dd></div>
-        <div><dt>매입금액</dt><dd class="mono">${h ? usd(h.purchaseAmount) : '–'}</dd></div>
         <div><dt>매수가능</dt><dd class="mono">${usd(secret.cash)}</dd></div>
-        <div><dt>사이클 원금</dt><dd class="mono">${usd(c.seed)}</dd></div>
-        <div><dt>1회 매수금</dt><dd class="mono">${usd(c.unit)}</dd></div>
-        <div><dt>누적 매수</dt><dd class="mono">${usd(c.bought)}</dd></div>
-        <div><dt>누적 매도</dt><dd class="mono">${usd(c.sold)}</dd></div>
+        <div><dt>사이클 원금</dt><dd class="mono">${usd(c.seed)} · 1회 ${usd(c.unit)}</dd></div>
+        <div><dt>누적 매수·매도</dt><dd class="mono">${usd(c.bought)} · ${usd(c.sold)}</dd></div>
       </dl>`;
     el('relock').addEventListener('click', lockAgain);
   }
@@ -516,8 +528,9 @@
     const rows = sorted.map(it => {
       const r = num(it.plRate), dr = num(it.dayRate);
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
+      const tickerOnly = (it.currency || 'USD') === 'USD' && !/[가-힣]/.test(it.name || '');
       return `<div class="row">${logo(it)}
-        <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
+        <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
           ${dr === null ? '' : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div>
@@ -556,8 +569,9 @@
     }).join('');
     const tot = `<span>합계 <span class="mono ${sign(r.totalUsd)}">${num(r.totalUsd) === null ? '' : sgnMoney(r.totalUsd, 'USD')}</span>
       <span class="mono ${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span></span>`;
-    box.innerHTML = `<h2>실현 손익 기록 <span class="muted" style="font-weight:400;font-size:0.85rem">봇 밖에서 판 내역</span></h2>${rows}<div class="tot">${tot}</div>
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`;
+    const sum = `<span class="${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span>`;
+    box.innerHTML = fold('realized', '실현 손익 기록', sum, `<p class="muted" style="font-size:0.85rem;margin:0">봇 밖에서 판 내역</p>${rows}<div class="tot">${tot}</div>
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`);
   }
 
   // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
@@ -592,12 +606,12 @@
       <div class="rrow"><div class="muted">└ 환율 영향 <span class="muted">· 달러 기준 ${pct(h.usdRate)}</span></div><div class="rt mono ${sign(h.fxPl)}">${wonS(h.fxPl)}</div></div>
       <div class="rrow"><div>판 것 + 보유 합계</div><div class="rt mono ${sign(num(t.gainKrw) + h.pl)}">${wonS(num(t.gainKrw) + h.pl)}</div></div>` : '';
     const note = h && h.names ? ` 보유 중 손익은 지금 평가액 × 지금 환율(₩${Math.round(h.fx * 100) / 100}) − 산 날 환율로 계산한 원화 매수금이라 환차손익이 들어가 있고, 아직 안 팔아서 세금엔 안 들어가요.${h.skipped.length ? ` 올해 전에 산 물량이 있어 뺀 종목: ${esc(h.skipped.join(', '))}.` : ''}` : '';
-    box.innerHTML = `<h2>${esc(t.year)}년 양도소득세 <span class="muted" style="font-weight:400;font-size:0.85rem">대략치</span></h2>
+    box.innerHTML = fold('tax', `${esc(t.year)}년 양도세 <span class="muted" style="font-weight:400;font-size:0.85rem">대략치</span>`, won(t.taxKrw), `
       <div class="rrow"><div>올해 양도차익 <span class="muted">판 것</span></div><div class="rt mono ${sign(t.gainKrw)}">${wonS(t.gainKrw)}</div></div>${hold}
       <div class="rrow"><div>기본공제</div><div class="rt mono">${won(t.deductionKrw)}</div></div>
       <div class="rrow"><div>과세 대상</div><div class="rt mono">${won(t.taxableKrw)}</div></div>
       <div class="rrow"><div><b>예상 양도세</b> <span class="muted">22%</span></div><div class="rt mono"><b>${won(t.taxKrw)}</b></div></div>
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">양도차익은 올해 판 것을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''}${note} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요.</p>`;
+      <details class="more" data-fold="tax-note"${openAttr('tax-note')}><summary>계산 방법 자세히</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">양도차익은 올해 판 것을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''}${note} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요.</p></details>`);
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -617,10 +631,8 @@
         <span>${label}</span><span class="mono">${detail || '<span class="muted">잠김</span>'}</span></div>`;
     }).join('');
     const kv = sp ? `<dl class="kv">
-        <div><dt>평단</dt><dd class="mono">${num(sp.avg) ? usd(sp.avg) : '–'}</dd></div>
         <div><dt>별지점</dt><dd class="mono">${usd(sp.starPrice)}</dd></div>
         <div><dt>기준 현재가</dt><dd class="mono">${usd(sp.lastPrice)}</dd></div>
-        <div><dt>1회 매수금</dt><dd class="mono">${usd(sp.unit)}</dd></div>
       </dl>` : '';
     const notes = sp && sp.notes && sp.notes.length ? `<ul class="notes">${sp.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
     box.innerHTML = `<h2>다음 주문 계획 · ${md(n.date)}</h2>
@@ -707,14 +719,18 @@
     const [y, m] = calMonth.split('-').map(Number);
 
     // 월~금 칸: 그 달 1일이 있는 주의 월요일부터
-    const cells = [];
+    // 기록이 하나도 없는 주는 빼서 폰에서 덜 길게
+    const weeks = [{ cells: [], has: false }];
+    const cells = { push: c => weeks[weeks.length - 1].cells.push(c) };
     const start = new Date(Date.UTC(y, m - 1, 1));
     const lead = (start.getUTCDay() + 6) % 7;   // 월=0
     for (let i = 0; i < Math.min(lead, 5); i++) cells.push('<div class="cal-cell blank"></div>');
     for (let dt = new Date(start); dt.getUTCMonth() === m - 1; dt.setUTCDate(dt.getUTCDate() + 1)) {
       const wd = dt.getUTCDay(); if (wd === 0 || wd === 6) continue;
+      if (wd === 1 && weeks[weeks.length - 1].cells.length) weeks.push({ cells: [], has: false });
       const key = dt.toISOString().slice(0, 10), d = byDate[key];
       if (!d) { cells.push(`<div class="cal-cell none"><span class="dn">${dt.getUTCDate()}</span></div>`); continue; }
+      weeks[weeks.length - 1].has = true;
       const orders = d.orders || [];
       const buys = orders.filter(o => o.side === 'BUY' && (o.status === 'filled' || o.status === 'partial')).length;
       const sells = orders.filter(o => o.side === 'SELL' && (o.status === 'filled' || o.status === 'partial')).length;
@@ -734,7 +750,7 @@
           <button type="button" class="ghost nav" id="cal-next" ${calMonth >= last ? 'disabled' : ''} aria-label="다음 달">›</button>
           <span class="cal-sum">${monthPct === null ? '' : `월간 <span class="mono ${sign(monthPct)}">${pct(monthPct, 1)}</span>`}${nPnl ? ` · <span class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''} · ${inMonth.length}거래일</span>
         </div>
-        <div class="cal-grid">${['월', '화', '수', '목', '금'].map(w => `<div class="cal-wd">${w}</div>`).join('')}${cells.join('')}</div>
+        <div class="cal-grid">${['월', '화', '수', '목', '금'].map(w => `<div class="cal-wd">${w}</div>`).join('')}${weeks.filter(w => w.has).flatMap(w => w.cells).join('')}</div>
         <p class="cal-foot">미국 거래일 기준 · 일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금)</p>
       </div>
       ${dayCard(byDate[calPick], sec[calPick])}`;
@@ -745,15 +761,30 @@
 
   function renderHistory() {
     const hs = data.history || [];
-    if (!hs.length) { el('history').innerHTML = '<div class="empty">아직 끝난 사이클이 없어요.</div>'; return; }
+    if (!hs.length) { el('history').innerHTML = fold('history', '완료한 사이클', '', '<div class="empty">아직 끝난 사이클이 없어요.</div>'); return; }
     const sec = {};
     if (secret) for (const c of secret.history || []) sec[c.id] = c;
-    el('history').innerHTML = `<div class="table-wrap"><table>
+    const lastR = hs[hs.length - 1].returnPct;
+    el('history').innerHTML = fold('history', '완료한 사이클', `${hs.length}번 · 최근 <span class="${sign(lastR)}">${lastR === null ? '–' : pct(lastR, 1)}</span>`, `<div class="table-wrap"><table>
       <thead><tr><th>#</th><th>기간</th><th class="num">거래일</th><th class="num">수익률</th>${secret ? '<th class="num">실현손익</th>' : ''}</tr></thead>
       <tbody>${hs.map(c => `<tr><td>${c.id}</td><td class="mono">${md(c.started)}~${md(c.ended)}</td><td class="num">${c.tradingDays}</td>
         <td class="num mono ${sign(c.returnPct)}">${c.returnPct === null ? '–' : pct(c.returnPct, 1)}</td>
-        ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+        ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`);
   }
+
+  // 가끔 보는 카드: 기본은 접힘(제목+핵심 숫자만), 펼친 상태는 이 브라우저에 기억. 1분마다 다시 그려도 유지
+  const FOLD_KEY = 'tecl-dashboard-folds';
+  let folds = {};
+  try { folds = JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; } catch (e) {}
+  const openAttr = key => folds[key] ? ' open' : '';
+  const fold = (key, title, sum, body) =>
+    `<details class="fold" data-fold="${key}"${openAttr(key)}><summary><h2>${title}</h2>${sum ? `<span class="fsum mono">${sum}</span>` : ''}</summary>${body}</details>`;
+  document.addEventListener('toggle', e => {
+    const k = e.target.dataset && e.target.dataset.fold;
+    if (!k) return;
+    folds[k] = e.target.open;
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (er) {}
+  }, true);
 
   // 접기/펼치기 상태는 칸마다 이 브라우저에 기억
   function foldable(id, key, onToggle) {
@@ -850,7 +881,7 @@
           if (live.cash != null) secret.cash = live.cash;
           if (live.fx != null) secret.fx = live.fx;
           acctLive = live.at; acctOk = true; acctFlash = true;
-          renderAccount(); renderSecret(); renderTax();
+          renderStats(); renderAccount(); renderSecret(); renderTax();
         }
       } catch (e) {
         if (acctLive && acctOk) { acctOk = false; renderAccount(); }   // 끊기면 마지막 실시간 데이터라고 표시
