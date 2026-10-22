@@ -25,6 +25,9 @@ def parse(chart: dict) -> dict[str, float]:
     for ts, c in zip(r.get("timestamp") or [], closes):
         if c is not None:
             out[datetime.fromtimestamp(ts, NY).date().isoformat()] = round(c, 4)
+    m = r.get("meta") or {}
+    if m.get("regularMarketPrice") and m.get("regularMarketTime"):   # 야후가 마지막 날 일봉을 늦게 채울 때가 있음 → 그날 종가는 meta 값으로
+        out.setdefault(datetime.fromtimestamp(m["regularMarketTime"], NY).date().isoformat(), round(m["regularMarketPrice"], 4))
     return out
 
 
