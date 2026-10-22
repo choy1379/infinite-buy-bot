@@ -262,7 +262,7 @@
   .stat.hero .amt { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
   .stat.hero.wait .value, .stat.hero.wait .amt { opacity: .35; transition: opacity .2s; }
   .stat.hero .bar { margin: 10px 0 6px; }
-  /* SOXL 하루 -1%마다 한 단계씩 진하게 (최대 5단계). 깜박임·소리 없이 눈에만 띄게 */
+  /* TECL·SOXL 하루 -1%마다 한 단계씩 진하게 (최대 5단계). 깜박임·소리 없이 눈에만 띄게 */
   .drop { color: color-mix(in srgb, var(--sell), var(--ink) calc(var(--lv) * 8%)); }
   .dropb { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 6px; font-size: .8rem; font-weight: 700; vertical-align: middle;
     color: var(--sell); background: color-mix(in srgb, var(--sell) calc(var(--lv) * 8% + 6%), transparent); }
@@ -439,7 +439,7 @@
   }
 
   // 오늘 등락률: 지금 값(실시간, 없으면 마지막 종가) ÷ 이미 마감한 직전 정규장 종가 - 1
-  const DROP_SYMS = ['SOXL'];
+  const DROP_SYMS = ['TECL', 'SOXL'];
   function dayRate(sym) {
     const px = alt && alt.closes && alt.closes[sym], lv = livePx[sym];
     if (!px) return null;
@@ -545,6 +545,8 @@
     const live = secret && (secret.account || []).find(it => String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase());
     const h = secret && secret.holding;
     const rate = live ? num(live.plRate) : num(p.plRate);
+    const day = live && num(live.dayRate) !== null ? num(live.dayRate) : DROP_SYMS.includes(String(data.symbol).toUpperCase()) ? dayRate(data.symbol) : null;
+    const dLv = rate < 0 ? dropLv(day) : 0;
     const plUsd = live ? num(live.pl) : h ? num(h.qty) * (num(secret.price) - num(h.avg)) : null;
     const fx = secret ? num(secret.fx) : null;
     const amt = plUsd === null || Number.isNaN(plUsd) ? '' : `<div class="amt mono ${sign(plUsd)}">${plUsd >= 0 ? '+' : ''}${usd(plUsd)}${fx ? ` · ${plUsd >= 0 ? '+' : '-'}₩${Math.round(Math.abs(plUsd * fx)).toLocaleString('ko-KR')}` : ''}</div>`;
@@ -558,7 +560,7 @@
       ${w ? `<div class="value mono ${sign(w.rate)}${wLv ? ' drop" style="--lv:' + wLv : ''}">${pct(w.rate)}${dropBadge(wDay)}</div>
         <div class="amt mono ${sign(w.pl)}">${w.pl >= 0 ? '+' : ''}${usd(w.pl)}${fx ? ` · ${w.pl >= 0 ? '+' : '-'}₩${Math.round(Math.abs(w.pl * fx)).toLocaleString('ko-KR')}` : ''}</div>
         <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${w.at} 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
-        <div class="value mono ${sign(rate)}">${p.hasPosition ? pct(rate) : '–'}</div>
+        <div class="value mono ${sign(rate)}${dLv ? ' drop" style="--lv:' + dLv : ''}">${p.hasPosition ? pct(rate) + dropBadge(day) : '–'}</div>
         ${p.hasPosition ? amt : ''}
         ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
         <div class="sub">${goal}</div></div>`}
