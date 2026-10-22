@@ -260,6 +260,7 @@
   .empty { border: 0; }
   @media (max-width: 420px) { .stat.hero .value { font-size: 2.1rem; } }
   .stat.hero .amt { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
+  .stat.hero.wait .value, .stat.hero.wait .amt { opacity: .35; transition: opacity .2s; }
   .stat.hero .bar { margin: 10px 0 6px; }
   .stat.hero .hl { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .tabs.mini { padding: 3px; border-radius: 10px; }
@@ -466,6 +467,8 @@
     if (!data || !data.secret) { if (!quiet) el('lockmsg').textContent = '잠긴 정보가 없어요 (봇 설정에 비밀번호가 없음).'; return; }
     try {
       secret = await decrypt(pw, data.secret);
+      if (acctData && new Date(acctData.at) > new Date(data.updatedAt)) applyLive(acctData);   // 1분마다 다시 받는 스냅샷이 더 새 실시간 값을 덮지 않게
+      else acctWait = true;   // 실시간 값 오기 전까진 스냅샷 숫자를 흐리게 (못 받으면 pollAccount가 풂)
       password = pw;
       useTunnel(secret.liveUrl);
       el('lock').hidden = true;
@@ -486,7 +489,7 @@
   });
 
   function lockAgain() {
-    secret = null; password = null; acctLive = null; acctOk = false; clearTimeout(acctTimer);
+    secret = null; password = null; acctLive = null; acctOk = false; acctData = null; acctWait = false; clearTimeout(acctTimer);
     try { localStorage.removeItem(PW_KEY); } catch (e) {}
     el('pw').value = '';
     el('lock').hidden = false;
@@ -532,7 +535,7 @@
       : toGo <= 0 ? `목표 +${esc(data.targetPct)}% 도달 · ¾ 익절 주문 나감` : `목표 +${esc(data.targetPct)}%까지 ${toGo.toFixed(2)}%p 남음 · 닿으면 ¾ 익절`;
     const gPct = toGo === null ? 0 : Math.max(0, Math.min(100, now / tgt * 100));
     el('stats').innerHTML = `
-      <div class="stat hero"><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
+      <div class="stat hero${acctWait && !w ? ' wait' : ''}"${acctWait && !w ? ' aria-busy="true"' : ''}><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
       ${w ? `<div class="value mono ${sign(w.rate)}">${pct(w.rate)}</div>
         <div class="amt mono ${sign(w.pl)}">${w.pl >= 0 ? '+' : ''}${usd(w.pl)}${fx ? ` · ${w.pl >= 0 ? '+' : '-'}₩${Math.round(Math.abs(w.pl * fx)).toLocaleString('ko-KR')}` : ''}</div>
         <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${w.at} 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
@@ -931,25 +934,30 @@
   // ---- 실시간 계좌: 봇 PC가 암호화해서 주는 /api/account 를 비밀번호를 푼 동안만 30초마다 받음 (실패하면 올려둔 데이터 그대로)
   const ACCT_MS = 31000;  // 봇 PC 캐시(30초)보다 살짝 길게 → 매번 새 데이터
   let acctTimer = null, acctLive = null, acctOk = false, acctFlash = false;  // acctLive = 마지막으로 실시간 갱신된 시각(ISO), acctOk = 지금 연결 중인지
+  let acctData = null, acctWait = false;  // acctData = 마지막 실시간 응답, acctWait = 첫 실시간 응답 기다리는 중
+  function applyLive(live) {
+    secret.account = live.account;
+    if (live.cash != null) secret.cash = live.cash;
+    if (live.fx != null) secret.fx = live.fx;
+  }
   async function pollAccount() {
     clearTimeout(acctTimer);
     if (!password || !secret || DEMO) return;
     if (!document.hidden) {
       try {
         const res = await fetch(`${LIVE}api/account?t=${Date.now()}`, { cache: 'no-store' });
-        if (res.status === 404) return;   // 봇이 띄운 페이지/터널이 아니거나 계좌 조회를 안 함 → 올려둔 데이터만
+        if (res.status === 404) { if (acctWait) { acctWait = false; renderStats(); } return; }   // 봇이 띄운 페이지/터널이 아니거나 계좌 조회를 안 함 → 올려둔 데이터만
         const box = await res.json();
         if (!res.ok) throw new Error(box.error || res.status);
         const live = await decrypt(password, box);
         if (password && secret) {
-          secret.account = live.account;
-          if (live.cash != null) secret.cash = live.cash;
-          if (live.fx != null) secret.fx = live.fx;
+          applyLive(live); acctData = live; acctWait = false;
           acctLive = live.at; acctOk = true; acctFlash = true;
           renderStats(); renderAccount(); renderSecret(); renderTax();
         }
       } catch (e) {
         if (acctLive && acctOk) { acctOk = false; renderAccount(); }   // 끊기면 마지막 실시간 데이터라고 표시
+        if (acctWait) { acctWait = false; renderStats(); }   // 못 받으면 스냅샷 숫자를 그대로 보여 줌
       }
     }
     acctTimer = setTimeout(pollAccount, ACCT_MS);
