@@ -245,6 +245,20 @@ class AccountRefreshTest(unittest.TestCase):
         dash.refresh_account(bot)
         self.assertEqual(pub.puts, ["dashboard: start", "dashboard: account"])
 
+    def test_publishes_again_when_tax_refresh_finishes(self):
+        bot = self.make_bot()
+        pub = FakePublisher()
+        dash = bot.dashboard = Dashboard(pub, "pw-12345678", account_minutes=5)
+        self.broker.holdings_all = lambda: {"items": []}
+        self.at(2026, 10, 7, 10, 0)
+        dash.publish(bot, "start")
+        # 뒤에서 돌던 양도세·체결 목록 계산이 끝나 tax.json 이 새로 저장됨
+        bot.cfg.run.state_dir.mkdir(parents=True, exist_ok=True)
+        (bot.cfg.run.state_dir / "tax.json").write_text(json.dumps({"fx": {}, "result": {"fills": []}, "at": "2026-10-07T10:01:00+09:00"}), encoding="utf-8")
+        self.at(2026, 10, 7, 10, 5)
+        dash.refresh_account(bot)
+        self.assertEqual(pub.puts, ["dashboard: start", "dashboard: account"])
+
     def test_alive_beat_every_five_minutes_and_rides_along_with_publish(self):
         bot = self.make_bot()
         bot.live_url = "https://abc.trycloudflare.com"
