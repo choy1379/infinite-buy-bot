@@ -618,14 +618,14 @@
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
       const tickerOnly = (it.currency || 'USD') === 'USD' && !/[가-힣]/.test(it.name || '');
       return `<div class="row">${logo(it)}
-        <div style="min-width:0${isBot ? ';grid-row:1 / span 2;align-self:center' : ''}"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
+        <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
           ${dr === null ? '' : DROP_SYMS.includes(String(it.symbol).toUpperCase()) && dropLv(dr) ? `<div class="sub">${dropBadge(dr)}</div>`
             : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div>
-        ${isBot ? '' : `<div class="det"><span>보유<b class="mono">${qty(it.qty)}주</b></span>
+        <div class="det"><span>보유<b class="mono">${qty(it.qty)}주</b></span>
             <span>평단<b class="mono">${money(it.avg, it.currency)}</b></span>
-            <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div>`}</div>`;
+            <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div></div>`;
     }).join('');
     const tot = {};
     for (const it of items) {
