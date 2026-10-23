@@ -362,6 +362,13 @@ class GitHubPublisher:
             raise RuntimeError(f"대시보드 업로드 실패 {status}: {res.get('message')}")
 
 
+def _tax_at(bot) -> str | None:
+    try:
+        return json.loads((bot.cfg.run.state_dir / "tax.json").read_text(encoding="utf-8")).get("at")
+    except Exception:
+        return None
+
+
 class Dashboard:
     ALIVE_PATH = "alive.json"
 
@@ -415,8 +422,8 @@ class Dashboard:
             raise
 
     @staticmethod
-    def _key(account, cash) -> str:
-        return json.dumps([account_items(account), _s(cash)], sort_keys=True, default=str)
+    def _key(account, cash, tax_at=None) -> str:
+        return json.dumps([account_items(account), _s(cash), tax_at], sort_keys=True, default=str)
 
     def refresh_account(self, bot) -> None:
         """계좌 전체·현금만 가볍게 조회해서, 마지막으로 올린 것과 다르면 대시보드를 다시 올린다.
@@ -424,7 +431,8 @@ class Dashboard:
         self.last_checked = bot.clock()
         account = bot.toss.holdings_all()
         cash = bot.toss.buying_power("USD")
-        if self._key(account, cash) != self._account_key:
+        # 양도세·체결 목록은 뒤에서 다시 계산되니, 끝났으면(at 바뀜) 계좌가 그대로여도 올린다
+        if self._key(account, cash, _tax_at(bot)) != self._account_key:
             self.publish(bot, "account", account=account, cash=cash)
 
     def publish(self, bot, reason: str, *, account=None, cash=None) -> None:
@@ -456,5 +464,5 @@ class Dashboard:
         extra = {self.ALIVE_PATH: self.alive_bytes(bot)} if self.alive_minutes > 0 else None
         self.publisher.put(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"), f"dashboard: {reason}", extra)
         self.last_published = bot.clock()
-        self._account_key = self._key(account, cash)
+        self._account_key = self._key(account, cash, tax and tax.get("at"))
         log.info("대시보드 갱신 (%s)", reason)

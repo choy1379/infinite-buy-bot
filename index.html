@@ -828,7 +828,7 @@
     el('days-sym').innerHTML = ordSym ? `<span class="muted" style="font-weight:400;font-size:0.85rem">· ${esc(ordSym)}${fsym ? '' : ' (봇)'}</span>
       <button type="button" class="ghost" id="days-all" style="padding:2px 8px;font-size:0.8rem;margin-left:4px">해제</button>` : '';
     if (ordSym) el('days-all').onclick = () => pickSym(ordSym);
-    if (fsym && !(secret && secret.tax && secret.tax.fills)) { el('days').innerHTML = '<div class="empty"><strong>봇 업데이트 후에 보여요</strong>봇 밖 종목의 주문은 서버 PC 봇이 새 버전이어야 올라와요.</div>'; return; }
+    if (fsym && !(secret && secret.tax && secret.tax.fills)) { el('days').innerHTML = '<div class="empty"><strong>체결 기록이 아직 안 올라왔어요</strong>봇이 올해 토스 체결을 모으는 중이에요. 보통 몇 분, 길면 6시간 안에 올라와요.</div>'; return; }
     const days = fsym ? fillDays(fsym) : data.days || [];
     if (!days.length) { el('days').innerHTML = fsym ? `<div class="empty"><strong>올해 ${esc(fsym)} 체결 기록이 없어요</strong>토스에서 체결된 주문만 보여요.</div>`
       : '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다. 가짜 데이터로 미리 보려면 주소 끝에 <span class="mono">?demo=1</span></div>'; return; }
