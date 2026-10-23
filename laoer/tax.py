@@ -50,7 +50,7 @@ class TaxLog:
 
     def stale(self, now: datetime) -> bool:
         at = self.data.get("at")
-        if not at or not self.data.get("result") or "open" not in self.data["result"]:  # 예전 형식이면 바로 다시 계산
+        if not at or not self.data.get("result") or "fills" not in self.data["result"]:  # 예전 형식이면 바로 다시 계산
             return True
         return now - datetime.fromisoformat(at) >= MAX_AGE
 
@@ -71,10 +71,12 @@ def year_orders(toss, now: datetime) -> list[dict]:
 
 def compute(orders: list[dict], fx_of) -> dict:
     """체결 주문 → 올해 원화 손익과 예상 양도세. fx_of(filledAt) 는 그 시각의 원/달러 환율."""
-    fills = []
+    fills, listed = [], []
     for o in orders:
         for side in ("BUY", "SELL"):
             f = _normalize_fill(o, side)
+            if f:  # 대시보드 '날짜별 주문'에서 종목별로 보여 줄 체결 목록 (원화 종목 포함)
+                listed.append({"symbol": f["symbol"], "side": side, "qty": str(f["qty"]), "price": str(f["price"]), "currency": f["currency"], "at": f["filledAt"]})
             if f and f["currency"] != "KRW":
                 f["side"] = side
                 fills.append(f)
@@ -125,6 +127,7 @@ def compute(orders: list[dict], fx_of) -> dict:
         "bySymbol": {s: str(v.quantize(WON, rounding=ROUND_HALF_UP)) for s, v in sorted(by_symbol.items())},
         "unknown": unknown,
         "open": open_,
+        "fills": sorted(listed, key=lambda f: f["at"] or ""),
     }
 
 

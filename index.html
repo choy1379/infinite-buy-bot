@@ -195,6 +195,9 @@
 
   .acct .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; }
   .acct .row + .row { border-top: 1px solid var(--line); }
+  .acct .row[data-sym] { cursor: pointer; margin: 0 -8px; padding: 10px 8px; border-radius: 10px; }
+  .acct .row.on { background: var(--soft); }
+  .acct .row[data-sym]:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
   .acct .logo { width: 36px; height: 36px; border-radius: 50%; object-fit: contain; background: #fff; border: 1px solid var(--line); }
   .acct .logo.txt { display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 0.72rem; letter-spacing: -0.02em; border: 0; overflow: hidden; }
   .acct .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -354,7 +357,7 @@
   <section class="card acct" id="acct" hidden></section>
 
   <section>
-    <h2>날짜별 주문</h2>
+    <h2>날짜별 주문 <span id="days-sym"></span></h2>
     <div id="days" style="display:grid;gap:12px"></div>
   </section>
 
@@ -623,7 +626,8 @@
       const r = num(it.plRate), dr = num(it.dayRate);
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
       const tickerOnly = (it.currency || 'USD') === 'USD' && !/[가-힣]/.test(it.name || '');
-      return `<div class="row">${logo(it)}
+      const on = String(it.symbol).toUpperCase() === ordSym;
+      return `<div class="row${on ? ' on' : ''}" data-sym="${esc(String(it.symbol).toUpperCase())}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(it.symbol)} 날짜별 주문 보기">${logo(it)}
         <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
@@ -742,6 +746,33 @@
 
   // ---- 날짜별 주문: 달력(월~금) + 고른 날의 주문 상세
   let calMonth = null, calPick = null;   // 'YYYY-MM', 'YYYY-MM-DD'
+  // 계좌 전체에서 고른 종목. 봇 종목이 아니면 달력은 올해 토스 체결(secret.tax.fills)로 그림
+  let ordSym = null;
+  const isBotSym = s => data && s === String(data.symbol).toUpperCase();
+  function pickSym(s) {
+    ordSym = ordSym === s ? null : s;
+    calMonth = calPick = null;
+    renderAccount(); renderDays();
+    if (ordSym) el('days').parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  el('acct').addEventListener('click', e => { const r = e.target.closest('.row[data-sym]'); if (r) pickSym(r.dataset.sym); });
+  el('acct').addEventListener('keydown', e => { const r = e.target.closest('.row[data-sym]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickSym(r.dataset.sym); } });
+  const mktDate = f => new Intl.DateTimeFormat('en-CA', { timeZone: f.currency === 'KRW' ? 'Asia/Seoul' : 'America/New_York' }).format(new Date(f.at));
+  function fillDays(sym) {
+    const by = {};
+    for (const f of secret.tax.fills) {
+      if (String(f.symbol).toUpperCase() !== sym || !f.at) continue;
+      const d = by[mktDate(f)] ||= { date: mktDate(f), reported: true, orders: [], fills: [] };
+      d.orders.push({ side: f.side, status: 'filled' }); d.fills.push(f);
+    }
+    return Object.values(by);
+  }
+  function fillCard(d) {
+    const rows = d.fills.map(f => `<div class="ord"><span class="side ${f.side}">${f.side === 'BUY' ? '매수' : '매도'}</span>
+      <span class="detail mono">${qty(f.qty)}주 @ ${money(f.price, f.currency)} · ${kst(f.at).split(' ')[1] || ''}</span>
+      <span class="tag filled">${STATUS.filled}</span></div>`).join('');
+    return `<article class="day"><header><h3>${md(d.date)}</h3><span>${esc(ordSym)} · 토스 체결</span></header>${rows}</article>`;
+  }
   const ym = d => d.slice(0, 7);
   const shiftMonth = (m, k) => { const [y, mo] = m.split('-').map(Number); const t = new Date(Date.UTC(y, mo - 1 + k, 1)); return t.toISOString().slice(0, 7); };
 
@@ -793,11 +824,17 @@
   }
 
   function renderDays() {
-    const days = data.days || [];
-    if (!days.length) { el('days').innerHTML = '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다. 가짜 데이터로 미리 보려면 주소 끝에 <span class="mono">?demo=1</span></div>'; return; }
+    const fsym = ordSym && !isBotSym(ordSym) ? ordSym : null;
+    el('days-sym').innerHTML = ordSym ? `<span class="muted" style="font-weight:400;font-size:0.85rem">· ${esc(ordSym)}${fsym ? '' : ' (봇)'}</span>
+      <button type="button" class="ghost" id="days-all" style="padding:2px 8px;font-size:0.8rem;margin-left:4px">해제</button>` : '';
+    if (ordSym) el('days-all').onclick = () => pickSym(ordSym);
+    if (fsym && !(secret && secret.tax && secret.tax.fills)) { el('days').innerHTML = '<div class="empty"><strong>봇 업데이트 후에 보여요</strong>봇 밖 종목의 주문은 서버 PC 봇이 새 버전이어야 올라와요.</div>'; return; }
+    const days = fsym ? fillDays(fsym) : data.days || [];
+    if (!days.length) { el('days').innerHTML = fsym ? `<div class="empty"><strong>올해 ${esc(fsym)} 체결 기록이 없어요</strong>토스에서 체결된 주문만 보여요.</div>`
+      : '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다. 가짜 데이터로 미리 보려면 주소 끝에 <span class="mono">?demo=1</span></div>'; return; }
     const byDate = {}, sec = {};
     for (const d of days) byDate[d.date] = d;
-    if (secret) for (const d of secret.days || []) sec[d.date] = d;
+    if (secret && !fsym) for (const d of secret.days || []) sec[d.date] = d;
     const dates = Object.keys(byDate).sort();
     const first = ym(dates[0]), last = ym(dates[dates.length - 1]);
     if (!calMonth || calMonth < first || calMonth > last) calMonth = last;
@@ -846,9 +883,9 @@
           <span class="cal-sum">${monthPct === null ? '' : `월간 <span class="mono ${sign(monthPct)}">${pct(monthPct, 1)}</span>`}${nPnl ? ` · <span class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''} · ${inMonth.length}거래일</span>
         </div>
         <div class="cal-grid">${['월', '화', '수', '목', '금'].map(w => `<div class="cal-wd">${w}</div>`).join('')}${weeks.filter(w => w.has).flatMap(w => w.cells).join('')}</div>
-        <p class="cal-foot">미국 거래일 기준 · 일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금)</p>
+        <p class="cal-foot">${fsym ? '올해 토스 체결 기준 (봇 밖 매매 포함) · 몇 시간 늦게 반영될 수 있어요' : '미국 거래일 기준 · 일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금)'}</p>
       </div>
-      ${dayCard(byDate[calPick], sec[calPick])}`;
+      ${fsym ? fillCard(byDate[calPick]) : dayCard(byDate[calPick], sec[calPick])}`;
     el('cal-prev').onclick = () => { calMonth = shiftMonth(calMonth, -1); renderDays(); };
     el('cal-next').onclick = () => { calMonth = shiftMonth(calMonth, 1); renderDays(); };
     for (const b of el('days').querySelectorAll('.cal-cell[data-date]')) b.onclick = () => { calPick = b.dataset.date; renderDays(); };
@@ -1219,7 +1256,12 @@
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
         realized: { items: [{ symbol: 'KO', name: '코카콜라', currency: 'USD', date: '2026-10-08', qty: '120', price: '87.00', cost: '87.74', plUsd: '-89.40', plKrw: '-124000', fx: '1388.5' }], totalUsd: '-89.40', totalKrw: '-124000' },
-        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 }, open: qty ? { TECL: { qty: String(qty), costKrw: String(Math.round(qty * avg * 1395)), costUsd: (qty * avg).toFixed(2) } } : {} },
+        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 }, fills: [
+          { symbol: 'KO', side: 'BUY', qty: '120', price: '72.40', currency: 'USD', at: '2026-09-15T14:02:00Z' },
+          { symbol: 'KO', side: 'SELL', qty: '40', price: '70.10', currency: 'USD', at: '2026-10-08T15:44:00Z' },
+          { symbol: 'KO', side: 'BUY', qty: '40', price: '67.20', currency: 'USD', at: '2026-10-09T19:30:00Z' },
+          { symbol: '005930', side: 'BUY', qty: '10', price: '61200', currency: 'KRW', at: '2026-10-02T01:10:00Z' },
+        ], open: qty ? { TECL: { qty: String(qty), costKrw: String(Math.round(qty * avg * 1395)), costUsd: (qty * avg).toFixed(2) } } : {} },
         fx: '1380',
         account: [
           ...(qty ? [{ symbol: 'TECL', name: 'Direxion Daily Technology Bull 3X', market: 'US', currency: 'USD', qty: String(qty), avg: avg.toFixed(4), last: String(close),

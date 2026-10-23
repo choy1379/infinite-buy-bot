@@ -82,6 +82,14 @@ class ComputeTest(unittest.TestCase):
         o["currency"] = "KRW"
         self.assertEqual(compute([o], fx_of)["gainKrw"], "0")
 
+    def test_fills_list_every_symbol_in_time_order(self):
+        k = order("k", "005930", "BUY", 1, 70000, "2026-03-01T09:00:00+09:00")
+        k["currency"] = "KRW"
+        orders = [order("s", "AAA", "SELL", 2, 130, "2026-06-01T11:00:00+09:00"), order("b", "AAA", "BUY", 3, 100, "2026-03-01T10:00:00+09:00"), k]
+        f = compute(orders, fx_of)["fills"]
+        self.assertEqual([(x["symbol"], x["side"], x["qty"]) for x in f], [("005930", "BUY", "1"), ("AAA", "BUY", "3"), ("AAA", "SELL", "2")])
+        self.assertEqual(f[1]["price"], "100")
+
 
 class FakeToss:
     def __init__(self, orders):
