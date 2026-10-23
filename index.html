@@ -68,7 +68,7 @@
   .notice.warn { background: var(--low-bg); color: var(--low); }
 
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
   .stat .label { color: var(--muted); font-size: 0.82rem; }
   .stat .value { font-size: 1.45rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
@@ -234,7 +234,6 @@
   .stat { padding: 18px 20px; }
   .stat .label { font-size: 0.85rem; }
   .stat .value { font-size: 1.4rem; letter-spacing: -0.03em; }
-  .stat.span { grid-column: 1 / -1; }
   .stat.hero { grid-column: 1 / -1; padding: 22px 20px; }
   .stat.hero .value { font-size: 2.4rem; line-height: 1.15; margin: 4px 0 2px; }
   .bar { background: var(--soft); }
@@ -259,9 +258,11 @@
   .acct .bot { border: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); }
   .empty { border: 0; }
   @media (max-width: 420px) { .stat.hero .value { font-size: 2.1rem; } }
+  @media (max-width: 480px) { .stats { gap: 8px; } .stat:not(.hero) { padding: 14px 12px; } .stat:not(.hero) .value { font-size: 1.1rem; } .stat:not(.hero) .sub { font-size: 0.75rem; } }
   .stat.hero .amt { font-size: 1rem; font-weight: 600; margin-bottom: 2px; }
   .stat.hero.wait .value, .stat.hero.wait .amt { opacity: .35; transition: opacity .2s; }
   .stat.hero .bar { margin: 10px 0 6px; }
+  .stat.hero .bar > span { background: var(--muted); }
   /* TECL·SOXL 하루 -1%마다 한 단계씩 진하게 (최대 5단계). 깜박임·소리 없이 눈에만 띄게 */
   .drop { color: color-mix(in srgb, var(--sell), var(--ink) calc(var(--lv) * 8%)); }
   .dropb { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 6px; font-size: .8rem; font-weight: 700; vertical-align: middle;
@@ -289,8 +290,6 @@
     .ticker .track { animation: none; } .ticker .run { flex-wrap: wrap; gap: 4px 18px; } .ticker .run + .run { display: none; }
   }
   @media (min-width: 1000px) {
-    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .stat.span { grid-column: auto; }
   }
   /* 상태는 오른쪽 위 밝게 보기 옆에 작은 표시만 (자세한 갱신 시각은 마우스 올리면) */
   .topr { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -359,7 +358,7 @@
 
   <footer>
     <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
-    <p>실시간 호가는 봇이 도는 PC에서만 보여요 (이 페이지 또는 <span class="mono">http://localhost:8765</span>). 같은 와이파이의 폰은 PC IP:8765로 접속하세요.</p>
+    <p>실시간 계좌·시세는 봇이 도는 PC가 켜져 있을 때 잠금을 풀면 어디서든 보여요.</p>
     <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
   </footer>
   </div>
@@ -571,9 +570,9 @@
       <div class="stat"><div class="label">사이클</div>
         <div class="value">${c ? `#${c.id}` : '–'}</div>
         <div class="sub">${c ? `${md(c.started)} 시작 · ${c.tradingDays}거래일째` : '다음 장에 새로 시작'}</div></div>
-      <div class="stat span"><div class="label">다음 주문</div>
-        <div class="value mono" style="font-size:1.15rem">${ns ? kst(ns.orderAt) : '–'}</div>
-        <div class="sub">${ns ? `정규장 ${kst(ns.start).split(' ').pop()} ~ ${kst(ns.end).split(' ').pop()}` : ''}</div></div>`;
+      <div class="stat"><div class="label">다음 주문${ns ? ' ' + kst(ns.orderAt).split(' ')[0] : ''}</div>
+        <div class="value mono">${ns ? kst(ns.orderAt).split(' ').pop() : '–'}</div>
+        <div class="sub">${ns ? `장 ${kst(ns.start).split(' ').pop()}~${kst(ns.end).split(' ').pop()}` : ''}</div></div>`;
   }
 
   function renderSecret() {
@@ -619,14 +618,14 @@
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
       const tickerOnly = (it.currency || 'USD') === 'USD' && !/[가-힣]/.test(it.name || '');
       return `<div class="row">${logo(it)}
-        <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
+        <div style="min-width:0${isBot ? ';grid-row:1 / span 2;align-self:center' : ''}"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
           ${dr === null ? '' : DROP_SYMS.includes(String(it.symbol).toUpperCase()) && dropLv(dr) ? `<div class="sub">${dropBadge(dr)}</div>`
             : `<div class="sub mono">오늘 <span class="${sign(dr)}">${pct(dr)}</span></div>`}</div>
-        <div class="det"><span>보유<b class="mono">${qty(it.qty)}주</b></span>
+        ${isBot ? '' : `<div class="det"><span>보유<b class="mono">${qty(it.qty)}주</b></span>
             <span>평단<b class="mono">${money(it.avg, it.currency)}</b></span>
-            <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div></div>`;
+            <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div>`}</div>`;
     }).join('');
     const tot = {};
     for (const it of items) {
@@ -1103,7 +1102,7 @@
       fxHtml = ''; renderTicker();
       if (!marketOpen()) { mktTimer = setTimeout(pollMarket, MKT_MS); return; }
       if (!el('mkt').querySelector('table'))
-        el('mkt').innerHTML = '<div class="err">선물 시세는 봇이 도는 PC(또는 같은 와이파이의 PC IP:8765)에서 열었을 때 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
+        el('mkt').innerHTML = '<div class="err">선물 시세는 봇 PC가 켜져 있을 때 잠금을 풀면 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
     }
     mktTimer = setTimeout(pollMarket, MKT_MS);
   }
