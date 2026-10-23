@@ -14,6 +14,7 @@
   :root {
     --bg: #f2f4f6; --surface: #ffffff; --ink: #191f28; --muted: #6b7684; --line: #e5e8eb;
     --accent: #3182f6; --on-accent: #ffffff; --soft: #f2f4f6;
+    --lvl-op: .18; --track: var(--line); --tab-off: var(--muted); --tab-bg: color-mix(in srgb, var(--ink) 7%, transparent); --tab-on: var(--surface);
     --ok: #13854e;  --ok-bg: #e5f7ed;
     --low: #b25e00; --low-bg: #fff3e0;
     --bad: #e42939; --bad-bg: #ffeeee;
@@ -26,6 +27,7 @@
     :root:not([data-theme="light"]) {
       --bg: #101012; --surface: #1d1d22; --ink: #ececf0; --muted: #9e9ea7; --line: #2e2e36;
       --accent: #4c94ff; --on-accent: #ffffff; --soft: #2a2a31;
+      --lvl-op: .38; --track: #3a3a44; --tab-off: #c4c4cc; --tab-bg: #2c2c34; --tab-on: #474752;
       --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
       --buy: #ff6b76; --sell: #5b9dff;
       color-scheme: dark;
@@ -34,6 +36,7 @@
   :root[data-theme="dark"] {
     --bg: #101012; --surface: #1d1d22; --ink: #ececf0; --muted: #9e9ea7; --line: #2e2e36;
     --accent: #4c94ff; --on-accent: #ffffff; --soft: #2a2a31;
+    --lvl-op: .38; --track: #3a3a44; --tab-off: #c4c4cc; --tab-bg: #2c2c34; --tab-on: #474752;
     --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
     --buy: #ff6b76; --sell: #5b9dff;
     color-scheme: dark;
@@ -73,7 +76,7 @@
   .stat .label { color: var(--muted); font-size: 0.82rem; }
   .stat .value { font-size: 1.45rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
   .stat .sub { color: var(--muted); font-size: 0.82rem; }
-  .bar { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .bar { height: 6px; background: var(--track); border-radius: 999px; overflow: hidden; margin-top: 8px; }
   .bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
   .bar.half > span { background: var(--low); }
   .up { color: var(--buy); } .down { color: var(--sell); }
@@ -134,7 +137,7 @@
   .book td.px { text-align: center; font-weight: 600; width: 40%; }
   .book .ask td.px { color: var(--sell); } .book .bid td.px { color: var(--buy); }
   .book .ask td.vol:first-child, .book .bid td.vol:last-child { text-align: right; }
-  .book .lvl { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: 0.18; }
+  .book .lvl { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: var(--lvl-op); }
   .book .ask .lvl { right: 0; background: var(--sell); } .book .bid .lvl { left: 0; background: var(--buy); }
   .book .vol span { position: relative; }
   .book tr.mid td { border-top: 1px solid var(--line); padding: 0; height: 1px; }
@@ -250,9 +253,9 @@
   .lock input[type=password] { background: var(--soft); border: 0; border-radius: 12px; }
   .kv div { border-bottom: 0; padding: 6px 0; }
   .tabs { border-bottom: 0; background: var(--soft); padding: 4px; border-radius: 12px; width: fit-content; gap: 2px; }
-  :root .tabs { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-  .tabs button { border: 0; margin: 0; border-radius: 9px; padding: 7px 18px; font-weight: 600; }
-  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
+  :root .tabs { background: var(--tab-bg); }
+  .tabs button { border: 0; margin: 0; border-radius: 9px; padding: 7px 18px; font-weight: 600; color: var(--tab-off); }
+  .tabs button[aria-selected="true"] { background: var(--tab-on); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
   .cal-cell { border: 0; background: var(--soft); border-radius: 10px; }
   .cal-cell.blank { background: transparent; }
   .heat { background: var(--surface); }
