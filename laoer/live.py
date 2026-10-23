@@ -20,6 +20,7 @@ import logging
 import threading
 import time
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,6 +30,7 @@ from .market import Market
 log = logging.getLogger(__name__)
 
 PAGE = Path(__file__).resolve().parents[1] / "index.html"
+BOOK_EXTRA = ("SOXL",)  # 대시보드 호가 카드 탭으로 같이 보는 종목 (/api/orderbook?symbol=SOXL)
 
 
 class _Cache:
@@ -95,7 +97,11 @@ class LiveServer:
         self.page = page
         self.dashboard_url = dashboard_url
         self._opener = opener or urllib.request.build_opener()
-        self.orderbook = _Cache(lambda: orderbook_payload(symbol, toss.orderbook(symbol)), orderbook_ttl, clock)
+        self.orderbooks = {
+            s: _Cache(lambda s=s: orderbook_payload(s, toss.orderbook(s)), orderbook_ttl, clock)
+            for s in dict.fromkeys((symbol.upper(), *BOOK_EXTRA))
+        }
+        self.orderbook = self.orderbooks[symbol.upper()]
         self.dashboard = _Cache(self._fetch_dashboard, dashboard_ttl, clock)
         self.market = _Cache((market or Market()).snapshot, market_ttl, clock)
         self.account = _Cache(account, account_ttl, clock) if account else None
@@ -155,8 +161,15 @@ class LiveServer:
                 if path in ("/", "/index.html"):
                     self._send(200, server.page.read_bytes(), "text/html; charset=utf-8")
                 elif path in API:
+                    cache = API[path]
+                    if path == "/api/orderbook":
+                        sym = (parse_qs(urlsplit(self.path).query).get("symbol") or [server.symbol])[0].upper()
+                        cache = server.orderbooks.get(sym)
+                        if cache is None:
+                            self._json(400, {"error": f"호가를 볼 수 없는 종목: {sym}"}, cors=True)
+                            return
                     try:
-                        self._json(200, API[path].get(), cors=True)
+                        self._json(200, cache.get(), cors=True)
                     except Exception as e:
                         self._json(502, {"error": str(e)}, cors=True)
                 elif path == "/dashboard.json":

@@ -131,6 +131,12 @@ class ServerTest(unittest.TestCase):
         self.get("/api/orderbook")
         self.assertEqual(self.toss.calls, 2)
 
+    def test_orderbook_other_symbol(self):
+        status, _, body = self.get("/api/orderbook?symbol=soxl")
+        self.assertEqual((status, json.loads(body)["symbol"]), (200, "SOXL"))
+        self.assertEqual(json.loads(self.get("/api/orderbook")[2])["symbol"], "TECL")
+        self.assertEqual(self.get("/api/orderbook?symbol=AAPL")[0], 400)
+
     def test_orderbook_allows_github_pages_page(self):
         _, headers, _ = self.get("/api/orderbook")
         self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
