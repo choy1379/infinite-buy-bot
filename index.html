@@ -124,12 +124,14 @@
   .fold > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   .err { color: var(--muted); font-size: 0.88rem; }
   .book { padding: 12px 16px; }
+  .book td.px small { display: block; font-size: 0.74rem; font-weight: 500; color: var(--muted); line-height: 1.3; white-space: nowrap; }
+  .book td.px small b { font-weight: 600; color: var(--ink); }
   .book #book-tabs { margin-bottom: 8px; }
   .book .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
   .book table { font-size: 0.9rem; }
   .book td { padding: 3px 8px; border: 0; position: relative; }
-  .book td.vol { width: 38%; }
-  .book td.px { text-align: center; font-weight: 600; width: 24%; }
+  .book td.vol { width: 30%; }
+  .book td.px { text-align: center; font-weight: 600; width: 40%; }
   .book .ask td.px { color: var(--sell); } .book .bid td.px { color: var(--buy); }
   .book .ask td.vol:first-child, .book .bid td.vol:last-child { text-align: right; }
   .book .lvl { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: 0.18; }
@@ -934,15 +936,22 @@
       const w = Math.round((num(r.volume) || 0) / max * 100);
       return `<td class="vol mono"><div class="lvl" style="width:${w}%"></div><span>${qty(r.volume)}</span></td>`;
     };
-    const row = (r, side) => side === 'ask'
-      ? `<tr class="ask">${vol(r, side)}<td class="px mono">${usd(r.price)}</td><td class="vol"></td></tr>`
-      : `<tr class="bid"><td class="vol"></td><td class="px mono">${usd(r.price)}</td>${vol(r, side)}</tr>`;
     const bestAsk = asks.length ? num(asks[asks.length - 1].price) : null, bestBid = bids.length ? num(bids[0].price) : null;
+    // 가격 아래 작은 줄: 현재가 대비 %, 잠금 해제 중이고 그 종목을 들고 있으면 내 평단 대비 %
+    const sym = String(b.symbol).toUpperCase();
+    const acct = secret && (secret.account || []).find(it => String(it.symbol).toUpperCase() === sym);
+    const avg = num(acct && acct.avg) || (secret && secret.holding && sym === String(data && data.symbol).toUpperCase() ? num(secret.holding.avg) : null);
+    const now = num(livePx[sym] && livePx[sym].price) || num(acct && acct.last) || (bestAsk !== null && bestBid !== null ? (bestAsk + bestBid) / 2 : null);
+    const vs = (px, base) => { const x = (px / base - 1) * 100; return `${x >= 0 ? '+' : ''}${x.toFixed(2)}%`; };
+    const sub = r => { const px = num(r.price); return px && now ? `<small>${vs(px, now)}${avg ? ` · <b>${vs(px, avg)}</b>` : ''}</small>` : ''; };
+    const row = (r, side) => side === 'ask'
+      ? `<tr class="ask">${vol(r, side)}<td class="px mono">${usd(r.price)}${sub(r)}</td><td class="vol"></td></tr>`
+      : `<tr class="bid"><td class="vol"></td><td class="px mono">${usd(r.price)}${sub(r)}</td>${vol(r, side)}</tr>`;
     const spread = bestAsk !== null && bestBid !== null ? `${usd(bestAsk - bestBid)} (${((bestAsk - bestBid) / ((bestAsk + bestBid) / 2) * 100).toFixed(2)}%)` : '–';
     const at = b.timestamp || b.fetchedAt;
     el('book').innerHTML = (asks.length || bids.length) ? `
       <div class="meta"><span>매도 잔량 · 가격 · 매수 잔량</span><span>스프레드 <span class="mono">${spread}</span> · <span class="mono">${at ? kst(at) : '–'}</span></span></div>
-      <table aria-label="호가">${asks.map(r => row(r, 'ask')).join('')}<tr class="mid"><td colspan="3"></td></tr>${bids.map(r => row(r, 'bid')).join('')}</table>`
+      ${now ? `<div class="meta"><span>가격 아래: 현재가 <span class="mono">${usd(now)}</span> 대비${avg ? ` · <b style="color:var(--ink)">평단 <span class="mono">${usd(avg)}</span> 대비</b>` : ''}</span></div>` : ''}<table aria-label="호가">${asks.map(r => row(r, 'ask')).join('')}<tr class="mid"><td colspan="3"></td></tr>${bids.map(r => row(r, 'bid')).join('')}</table>`
       : '<div class="err">지금은 호가가 없어요 (장이 닫혀 있을 수 있어요).</div>';
   }
   async function pollBook() {
