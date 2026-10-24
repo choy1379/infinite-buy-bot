@@ -637,13 +637,14 @@
             <span>평단<b class="mono">${money(it.avg, it.currency)}</b></span>
             <span>현재<b class="mono ${sign((num(it.last) ?? 0) - (num(it.avg) ?? 0))}">${money(it.last, it.currency)}</b></span></div></div>`;
     }).join('');
-    const tot = {};
+    const tot = {}, fx = num(secret.fx);  // 원화 환산은 지금 환율 (산 날 환율 아님)
     for (const it of items) {
       const t = tot[it.currency || 'USD'] ||= { value: 0, purchase: 0, pl: 0 };
       t.value += num(it.value) || 0; t.purchase += num(it.purchase) || 0; t.pl += num(it.pl) || 0;
     }
     const tots = Object.entries(tot).map(([cur, t]) => `<span>${cur === 'KRW' ? '원화' : '달러'} 합계 <span class="mono">${money(t.value, cur)}</span>
-      <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span></span>`).join('');
+      <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span>${cur === 'USD' && fx
+        ? `<span class="sub mono" style="display:block">${money(t.value * fx, 'KRW')} (손익 <span class="${sign(t.pl)}">${sgnMoney(t.pl * fx, 'KRW')}</span>) · 환율 ${fx.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</span>` : ''}</span>`).join('');
     const hm = iso => kst(iso).split(' ')[1];
     const hms = iso => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
     const flash = acctFlash; acctFlash = false;  // 새 데이터가 막 왔을 때만 시간이 깜박임 (다른 이유로 다시 그릴 땐 가만히)
