@@ -1134,7 +1134,7 @@
     ] };
   }
   // 전광판: 시장 탭 선물·환율 시세를 한 줄로 흘림 (같은 /api/market 응답). 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
-  let fxHtml = '';
+  let fxHtml = '', perpHtml = '';
   function renderFx(m) {
     livePx = {};
     for (const r of m.rows || []) if (isCmp(r) && !r.error && r.price) livePx[r.id.slice(4)] = { price: r.price, at: r.at };
@@ -1144,7 +1144,7 @@
     renderTicker();
   }
   function renderTicker() {
-    const one = fxHtml;
+    const one = fxHtml + perpHtml;
     const box = el('ticker'), track = el('track');
     box.hidden = !one;
     if (!one || track.dataset.html === one) return;
@@ -1173,6 +1173,20 @@
     mktTimer = setTimeout(pollMarket, MKT_MS);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollMarket(); });
+  // 바이낸스 SOXLUSDT 무기한 선물: SOXL 주말·장외 참고용. 바이낸스 공개 API는 CORS 허용이라 봇 없이 브라우저가 직접 받음
+  let perpTimer = null;
+  async function pollPerp() {
+    clearTimeout(perpTimer);
+    if (document.hidden) return;
+    try {
+      const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
+        : await (await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=SOXLUSDT', { cache: 'no-store' })).json();
+      perpHtml = num(r.lastPrice) ? `<span>SOXLUSDT 24h <b>${fmt(r.lastPrice)}</b> <span class="${sign(r.priceChange)}">${sgn(r.priceChange, fmt(r.priceChange))} (${sgn(r.priceChangePercent, fmt(r.priceChangePercent) + '%')})</span></span>` : '';
+    } catch (e) { perpHtml = ''; }
+    renderTicker();
+    perpTimer = setTimeout(pollPerp, MKT_MS);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollPerp(); });
 
   // ---- 가짜 데이터 (?demo=1): 실제 봇 데이터 없이 화면을 미리 보기 위한 모의 매매. 매번 같은 결과
   const DEMO = new URLSearchParams(location.search).get('demo') === '1';
@@ -1324,6 +1338,7 @@
   let startTab = location.hash === '#market' ? 'market' : 'bot';
   try { if (!location.hash && localStorage.getItem(TAB_KEY) === 'market') startTab = 'market'; } catch (e) {}
   showTab(startTab, false);
+  pollPerp();
 })();
 </script>
 </body>
