@@ -286,6 +286,10 @@
   /* 첫 화면 정리: 빈 알림 칸이 만들던 틈 제거, 상태·환율 한 묶음, 넓은 화면은 T값·사이클·다음 주문 한 줄, 계좌 행은 이름 아래 보유·평단·현재 */
   #notice:empty { display: none; }
   /* 전광판: 선물·환율 시세가 오른쪽에서 왼쪽으로 계속 흐름 (마우스 올리면 멈춤) */
+  .tabrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .perp { text-align: right; line-height: 1.35; font-size: 0.9rem; }
+  .perp small { color: var(--muted); font-size: 0.78rem; }
+  .perp b { font-weight: 600; }
   .ticker { margin: -12px 0 0; overflow: hidden; font-size: 0.88rem; color: var(--muted); white-space: nowrap;
     mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
   .ticker .track { display: inline-flex; animation: marquee var(--dur, 30s) linear infinite; }
@@ -320,9 +324,12 @@
       <button type="button" class="ghost theme" id="theme-btn" aria-label="화면 밝기 바꾸기"></button></div>
   </div>
 
+  <div class="tabrow">
   <div class="tabs" role="tablist" aria-label="화면">
     <button type="button" role="tab" id="tabbtn-bot" aria-controls="tab-bot" aria-selected="true">무한매수</button>
     <button type="button" role="tab" id="tabbtn-market" aria-controls="tab-market" aria-selected="false">시장</button>
+  </div>
+  <div class="perp mono" id="perp" aria-live="off" hidden></div>
   </div>
 
   <div class="panel" id="tab-bot" role="tabpanel" aria-labelledby="tabbtn-bot">
@@ -1134,7 +1141,7 @@
     ] };
   }
   // 전광판: 시장 탭 선물·환율 시세를 한 줄로 흘림 (같은 /api/market 응답). 같은 내용을 두 번 이어 붙여 끊김 없이 돌림
-  let fxHtml = '', perpHtml = '';
+  let fxHtml = '';
   function renderFx(m) {
     livePx = {};
     for (const r of m.rows || []) if (isCmp(r) && !r.error && r.price) livePx[r.id.slice(4)] = { price: r.price, at: r.at };
@@ -1144,7 +1151,7 @@
     renderTicker();
   }
   function renderTicker() {
-    const one = fxHtml + perpHtml;
+    const one = fxHtml;
     const box = el('ticker'), track = el('track');
     box.hidden = !one;
     if (!one || track.dataset.html === one) return;
@@ -1181,9 +1188,9 @@
     try {
       const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
         : await (await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=SOXLUSDT', { cache: 'no-store' })).json();
-      perpHtml = num(r.lastPrice) ? `<span>SOXLUSDT 24h <b>${fmt(r.lastPrice)}</b> <span class="${sign(r.priceChange)}">${sgn(r.priceChange, fmt(r.priceChange))} (${sgn(r.priceChangePercent, fmt(r.priceChangePercent) + '%')})</span></span>` : '';
-    } catch (e) { perpHtml = ''; }
-    renderTicker();
+      el('perp').innerHTML = num(r.lastPrice) ? `<small>SOXLUSDT 24h (바이낸스)</small><br><b>${fmt(r.lastPrice)}</b> <span class="${sign(r.priceChange)}">${sgn(r.priceChangePercent, fmt(r.priceChangePercent) + '%')}</span>` : '';
+    } catch (e) { el('perp').innerHTML = ''; }
+    el('perp').hidden = !el('perp').innerHTML;
     perpTimer = setTimeout(pollPerp, MKT_MS);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollPerp(); });
