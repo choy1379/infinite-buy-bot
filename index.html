@@ -455,8 +455,8 @@
 
   // 오늘 등락률: 지금 값(실시간, 없으면 마지막 종가) ÷ 이미 마감한 직전 정규장 종가 - 1
   const DROP_SYMS = ['TECL', 'SOXL'];
-  function dayRate(sym) {
-    const px = alt && alt.closes && alt.closes[sym], lv = livePx[sym];
+  function dayRate(sym, lv = livePx[sym]) {
+    const px = alt && alt.closes && alt.closes[sym];
     if (!px) return null;
     const ds = Object.keys(px).sort();
     // 장 마감(미국 16시) 전이면 그 전날 종가가 기준. at-16시간의 뉴욕 날짜 이하 = 이미 마감한 날
@@ -1146,6 +1146,7 @@
     livePx = {};
     for (const r of m.rows || []) if (isCmp(r) && !r.error && r.price) livePx[r.id.slice(4)] = { price: r.price, at: r.at };
     if (heroSym) renderStats();
+    if (!usWeekend()) pollPerp();   // 실시간 SOXL이 오면 10초 안 기다리고 바로
     fxHtml = (m.rows || []).filter(r => !r.error && !isCmp(r)).map(r =>
       `<span>${esc(r.name)} <b>${fmt(r.price)}</b> <span class="${sign(r.change)}">${sgn(r.change, fmt(r.change))} (${sgn(r.pct, fmt(r.pct) + '%')})</span></span>`).join('');
     renderTicker();
@@ -1193,8 +1194,16 @@
     if (document.hidden) return;
     try {
       if (!usWeekend()) {
-        const px = alt && alt.closes && alt.closes.SOXL, lv = livePx.SOXL;
-        const now = lv ? num(lv.price) : px ? px[Object.keys(px).sort().pop()] : null, r = dayRate('SOXL');
+        // 토스 현재가(cmp:SOXL)는 정규장 밖엔 종가에 멈춰 있어서, 데이장·프리·애프터 가격은 봇 호가 중간값으로
+        let lv = null;
+        try {
+          const b = DEMO ? null : await (await fetch(`${LIVE}api/orderbook?symbol=SOXL&t=${Date.now()}`, { cache: 'no-store' })).json();
+          const ask = b && b.asks && num(b.asks[0] && b.asks[0].price), bid = b && b.bids && num(b.bids[0] && b.bids[0].price);
+          if (ask && bid) lv = { price: (ask + bid) / 2, at: b.fetchedAt };
+        } catch (e) {}
+        lv = lv || livePx.SOXL;
+        const px = alt && alt.closes && alt.closes.SOXL;
+        const now = lv ? num(lv.price) : px ? px[Object.keys(px).sort().pop()] : null, r = dayRate('SOXL', lv);
         el('perp').innerHTML = now ? `<small>SOXL ${lv ? '실시간' : '종가'}</small><br><b>${fmt(now)}</b> ${dropLv(r) ? dropBadge(r) : `<span class="${sign(r)}">${pct(r)}</span>`}` : '';
       } else {
         const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
