@@ -1180,15 +1180,27 @@
     mktTimer = setTimeout(pollMarket, MKT_MS);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollMarket(); });
-  // 바이낸스 SOXLUSDT 무기한 선물: SOXL 주말·장외 참고용. 바이낸스 공개 API는 CORS 허용이라 봇 없이 브라우저가 직접 받음
+  // 탭 줄 오른쪽 칸: 평일은 SOXL(봇 실시간, 없으면 alt.json 종가), 주말은 바이낸스 SOXLUSDT 무기한 선물
+  // 주말 = 뉴욕 금 20시(애프터 끝)~일 20시(토스 데이장 시작). shortcut: 미국 휴장일은 평일 취급, 필요하면 휴장일 목록 추가
+  function usWeekend(t = new Date()) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(t).map(x => [x.type, x.value]));
+    const h = +p.hour;
+    return p.weekday === 'Sat' || (p.weekday === 'Fri' && h >= 20) || (p.weekday === 'Sun' && h < 20);
+  }
   let perpTimer = null;
   async function pollPerp() {
     clearTimeout(perpTimer);
     if (document.hidden) return;
     try {
-      const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
-        : await (await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=SOXLUSDT', { cache: 'no-store' })).json();
-      el('perp').innerHTML = num(r.lastPrice) ? `<small>SOXLUSDT 24h (바이낸스)</small><br><b>${fmt(r.lastPrice)}</b> <span class="${sign(r.priceChange)}">${sgn(r.priceChangePercent, fmt(r.priceChangePercent) + '%')}</span>` : '';
+      if (!usWeekend()) {
+        const px = alt && alt.closes && alt.closes.SOXL, lv = livePx.SOXL;
+        const now = lv ? num(lv.price) : px ? px[Object.keys(px).sort().pop()] : null, r = dayRate('SOXL');
+        el('perp').innerHTML = now ? `<small>SOXL ${lv ? '실시간' : '종가'}</small><br><b>${fmt(now)}</b> ${dropLv(r) ? dropBadge(r) : `<span class="${sign(r)}">${pct(r)}</span>`}` : '';
+      } else {
+        const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
+          : await (await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=SOXLUSDT', { cache: 'no-store' })).json();
+        el('perp').innerHTML = num(r.lastPrice) ? `<small>SOXLUSDT 24h (바이낸스)</small><br><b>${fmt(r.lastPrice)}</b> <span class="${sign(r.priceChange)}">${sgn(r.priceChangePercent, fmt(r.priceChangePercent) + '%')}</span>` : '';
+      }
     } catch (e) { el('perp').innerHTML = ''; }
     el('perp').hidden = !el('perp').innerHTML;
     perpTimer = setTimeout(pollPerp, MKT_MS);
@@ -1313,7 +1325,7 @@
 
   async function load() {
     if (DEMO) {
-      if (!data) { const d = demoData(); data = d.public; secret = d.secret; alt = demoAlt(); }
+      if (!data) { const d = demoData(); data = d.public; secret = d.secret; alt = demoAlt(); pollPerp(); }
       render();
       el('lock').hidden = true;
       el('notice').innerHTML = '<div class="notice warn">가짜 데이터로 보는 중이에요 (모의 매매 결과). 실제 화면은 주소에서 <span class="mono">?demo=1</span> 을 지우세요.</div>';
@@ -1325,7 +1337,7 @@
       data = await res.json();
       try {   // 비교 종가는 없어도 나머지 화면은 그대로
         const ar = await fetch(`${source('alt-data', 'alt.json')}?t=${Date.now()}`, { cache: 'no-store' });
-        if (ar.ok) alt = await ar.json();
+        if (ar.ok) { alt = await ar.json(); pollPerp(); }
       } catch (e) {}
       if (password && data.secret) await unlock(password, true);
       else if (!password) {
