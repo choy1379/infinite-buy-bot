@@ -450,7 +450,7 @@
     const last = Object.keys(px).sort().pop(), lv = livePx[sym];
     if (!q || !cost) return null;
     const now = lv ? lv.price : px[last];
-    return { rate: q * now / cost - 1, pl: q * now - cost, at: lv ? `${kst(lv.at)} 실시간` : `${md(last)} 시세` };
+    return { rate: q * now / cost - 1, pl: q * now - cost, qty: q, avg: cost / q, at: lv ? `${kst(lv.at)} 실시간` : `${md(last)} 시세` };
   }
 
   // 오늘 등락률: 지금 값(실시간, 없으면 마지막 종가) ÷ 이미 마감한 직전 정규장 종가 - 1
@@ -574,7 +574,7 @@
       <div class="stat hero${acctWait && !w ? ' wait' : ''}"${acctWait && !w ? ' aria-busy="true"' : ''}><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
       ${w ? `<div class="value mono ${sign(w.rate)}${wLv ? ' drop" style="--lv:' + wLv : ''}">${pct(w.rate)}${dropBadge(wDay)}</div>
         <div class="amt mono ${sign(w.pl)}">${w.pl >= 0 ? '+' : ''}${usd(w.pl)}${fx ? ` · ${w.pl >= 0 ? '+' : '-'}₩${Math.round(Math.abs(w.pl * fx)).toLocaleString('ko-KR')}` : ''}</div>
-        <div class="sub">이번 사이클 같은 날·같은 금액으로 ${heroSym} 매수 가정 · ${w.at} 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
+        <div class="sub"><span class="mono">${w.qty.toFixed(1)}주 · 평단 ${usd(w.avg)}</span> · 같은 날·같은 금액 매수 가정 · ${w.at} 기준${wBase ? ` · 같은 기준 ${esc(data.symbol)} ${pct(wBase.rate)}` : ''}</div></div>` : `
         <div class="value mono ${sign(rate)}${dLv ? ' drop" style="--lv:' + dLv : ''}">${p.hasPosition ? pct(rate) + dropBadge(day) : '–'}</div>
         ${p.hasPosition ? amt : ''}
         ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
