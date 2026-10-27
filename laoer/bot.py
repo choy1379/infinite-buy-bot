@@ -330,6 +330,7 @@ class Bot:
     def report(self, date: str, *, final: bool = False) -> str:
         day = self.state.days[date]
         pending = False
+        lookup_failed = []
         for e in day.get("orders", []):
             if not e.get("order_id") or e.get("final"):
                 continue
@@ -338,6 +339,7 @@ class Bot:
             except TossError as err:
                 log.warning("주문 %s 조회 실패: %s", e["order_id"], err)
                 pending = True
+                lookup_failed.append(e)
                 continue
             ex = od.get("execution") or {}
             e["status"] = od.get("status")
@@ -382,10 +384,11 @@ class Bot:
             completed = self._finish_cycle(cycle, date)
         self.state.save()
         self.notifier.send(self._report_message(date, day, h, cycle))
-        if unconfirmed:
+        # 애프터마켓까지 살아 있는 지정가(목표 매도)는 조회 실패가 아니니 경고하지 않는다
+        if lookup_failed:
             self.notifier.send(
                 Message(
-                    f"⚠️ {self.symbol} 체결 확인 못 한 주문 {len(unconfirmed)}건 · {date[5:].replace('-', '/')}",
+                    f"⚠️ {self.symbol} 체결 확인 못 한 주문 {len(lookup_failed)}건 · {date[5:].replace('-', '/')}",
                     ["토스 조회가 계속 실패해 이 주문은 사이클 매수·매도금에 아직 안 들어갔습니다.",
                      f"토스가 정상이 되면 `python -m laoer report --date {date}` 로 다시 반영하세요."],
                     "warn",

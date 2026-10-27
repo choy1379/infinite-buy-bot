@@ -313,6 +313,18 @@ class BotFlowTest(unittest.TestCase):
         bot.report("2026-10-06", final=True)  # 다시 돌려도 두 번 더하지 않음
         self.assertEqual(D(bot.state.cycle["bought"]), bought)
 
+    def test_order_still_open_after_close_is_not_lookup_failure(self):
+        bot = self.make_bot()
+        self.at(2026, 10, 6, 22, 45)
+        bot.tick()
+        self.broker.close_day(D(100))
+        next(iter(self.broker.orders.values()))["status"] = "PENDING"  # 애프터마켓까지 살아 있는 지정가
+        self.at(2026, 10, 7, 5, 30)
+        for _ in range(6):
+            bot.report("2026-10-06")
+        self.assertIn("체결 결과", self.capture.titles()[-1])
+        self.assertFalse(any("체결 확인 못" in t for t in self.capture.titles()))
+
     def test_error_alert_ignores_request_id(self):
         bot = self.make_bot()
         bot._notify_error(TossError(500, "down", "장애", "req-1"))
