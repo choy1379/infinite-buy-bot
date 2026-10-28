@@ -373,9 +373,11 @@
   </div>
 
   <footer>
-    <p>매수 LOC는 종가가 주문가 이하일 때, 매도 LOC는 이상일 때 종가로 체결됩니다. 목표지정가는 장중에 닿으면 체결됩니다.</p>
-    <p>실시간 계좌·시세는 봇이 도는 PC가 켜져 있을 때 잠금을 풀면 어디서든 보여요.</p>
-    <p>봇이 도는 PC가 주문·체결 시점과 몇 시간마다 이 페이지 데이터를 올립니다. 1분마다 다시 불러옵니다.</p>
+    <details class="more"><summary>도움말</summary>
+    <p>LOC 체결: 매수는 종가 ≤ 주문가, 매도는 종가 ≥ 주문가 · 목표지정가는 장중 체결</p>
+    <p>실시간 계좌·시세: 봇 PC 켜짐 + 잠금 해제</p>
+    <p>데이터 갱신: 주문·체결 때와 몇 시간마다 · 화면은 1분마다 새로고침</p>
+    </details>
   </footer>
   </div>
 
@@ -383,7 +385,7 @@
     <section class="card quotes">
       <div class="qhead"><h2>선물 시세</h2><span class="muted mono" id="mkt-at" style="font-size:0.82rem"></span></div>
       <div id="mkt"><div class="err">불러오는 중…</div></div>
-      <p class="src">봇 PC가 네이버·야후 시세를 10초마다 대신 받아와요. 코스피200은 18시~06시엔 야간선물이에요. 지연 시세일 수 있어요.</p>
+      <p class="src">봇 PC 경유 네이버·야후 시세 · 10초 갱신 · 코스피200은 18~06시 야간선물 · 지연 가능</p>
     </section>
     <section>
       <h2>미국 주식 히트맵</h2>
@@ -568,7 +570,7 @@
     const tgt = num(data.targetPct), now = rate === null ? null : rate * 100;
     const toGo = tgt !== null && now !== null ? tgt - now : null;
     const goal = toGo === null ? `목표 +${esc(data.targetPct)}%에서 ¾ 익절`
-      : toGo <= 0 ? `목표 +${esc(data.targetPct)}% 도달 · ¾ 익절 주문 나감` : `목표 +${esc(data.targetPct)}%까지 ${toGo.toFixed(2)}%p 남음 · 닿으면 ¾ 익절`;
+      : toGo <= 0 ? `목표 +${esc(data.targetPct)}% 도달 · ¾ 익절 주문 나감` : `목표 +${esc(data.targetPct)}%까지 ${toGo.toFixed(2)}%p · ¾ 익절`;
     const gPct = toGo === null ? 0 : Math.max(0, Math.min(100, now / tgt * 100));
     el('stats').innerHTML = `
       <div class="stat hero${acctWait && !w ? ' wait' : ''}"${acctWait && !w ? ' aria-busy="true"' : ''}><div class="hl"><div class="label">평가손익${w ? ` · ${heroSym} 가정` : ''}</div>${tabs}</div>
@@ -579,7 +581,7 @@
         ${p.hasPosition ? amt : ''}
         ${p.hasPosition && toGo !== null ? `<div class="bar" role="img" aria-label="목표까지 ${gPct.toFixed(0)}% 왔음"><span style="width:${gPct}%"></span></div>` : ''}
         <div class="sub">${goal}</div></div>`}
-      <div class="stat"><div class="label">T값 (${splits}분할)</div>
+      <div class="stat"><div class="label">T값</div>
         <div class="value mono">${t === null ? '0' : t.toFixed(2)}<span class="muted" style="font-size:.9rem"> / ${splits}</span></div>
         <div class="bar ${t !== null && t >= splits / 2 ? 'half' : ''}" role="img" aria-label="자금 사용 ${tPct.toFixed(0)}%"><span style="width:${tPct}%"></span></div>
         <div class="sub">${phase}</div></div>
@@ -612,7 +614,7 @@
         <div><dt>매수가능</dt><dd class="mono">${m(secret.cash)}</dd></div>
         <div><dt>사이클 원금</dt><dd class="mono">${m(c.seed)} · 1회 ${m(c.unit)}</dd></div>
         <div><dt>누적 매수·매도</dt><dd class="mono">${m(c.bought)} · ${m(c.sold)}</dd></div>
-      </dl>${krw ? `<p class="muted" style="font-size:0.75rem;margin:6px 0 0">지금 환율 ₩${Math.round(fx * 100) / 100}로 바꾼 대략치예요.</p>` : ''}`;
+      </dl>${krw ? `<p class="muted" style="font-size:0.75rem;margin:6px 0 0">환율 ₩${Math.round(fx * 100) / 100} 기준 환산</p>` : ''}`;
     el('relock').addEventListener('click', lockAgain);
   }
 
@@ -671,7 +673,7 @@
   let rMonth = null, rCur = 'USD';
   try { if (localStorage.getItem('tecl-dashboard-realized-cur') === 'KRW') rCur = 'KRW'; } catch (e) {}
   function realizedMonth(sells) {
-    if (!sells) return ['<p class="muted" style="font-size:0.85rem;margin:0">월별 보기는 봇 업데이트 후에 보여요.</p>', null];
+    if (!sells) return ['<p class="muted" style="font-size:0.85rem;margin:0">월별 보기: 봇 업데이트 필요</p>', null];
     if (!sells.length) return ['<p class="muted" style="font-size:0.85rem;margin:0">올해 판 기록이 아직 없어요.</p>', null];
     const months = [...new Set(sells.map(x => x.date.slice(0, 7)))].sort();
     if (!months.includes(rMonth)) rMonth = months[months.length - 1];
@@ -697,11 +699,11 @@
           `<button type="button" role="tab" data-rcur="${c}" aria-selected="${c === rCur}">${c === 'USD' ? '$' : '원'}</button>`).join('')}</div></div>
       <div class="mono ${sign(tot.pl)}" style="font-size:1.6rem;font-weight:700;margin:6px 0 2px">${f(tot.pl)} <span style="font-size:0.95rem">(${r(tot) === null ? '–' : pct(r(tot))})</span></div>
       ${krw ? `<div class="mono" style="font-size:0.85rem"><span class="${sign(tot.stock)}">주식 ${f(tot.stock)}</span> · ${fxe(tot)}</div>
-        <p class="muted" style="font-size:0.75rem;margin:2px 0 0">환율 몫은 주식이 아니라 환율이 움직여 생긴 값이에요 (달러를 원화로 바꿀 때 실제로 정해져요). 양도세는 원화 합계 기준이에요.</p>` : ''}
+        <p class="muted" style="font-size:0.75rem;margin:2px 0 0">환율 몫: 환율 변동분 (원화로 바꿀 때 확정) · 양도세는 원화 합계 기준</p>` : ''}
       <p class="muted" style="font-size:0.85rem;margin:10px 0 0">${Number(rMonth.slice(5))}월 종목별 합계</p>
       ${rows.map(([sym, b]) => `<div class="rrow"><div class="nm">${esc(sym)}</div>
         <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div>${krw ? `<div class="sub mono">${fxe(b)}</div>` : ''}</div></div>`).join('')}
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 토스 체결로 계산 (판 날 기준, 먼저 산 것부터 판 걸로 봄). 원화는 산 날·판 날 환율이라 환차손익이 들어가서 달러와 부호가 다를 수 있어요${krw ? ' (주식 = 달러 손익 × 판 날 환율, 환율 = 산 날과 판 날 환율 차이로 생긴 몫)' : ''}. 올해 전에 산 물량은 빠지고, 토스 앱 숫자와 다를 수 있어요 (양도세 대략치는 앱보다 약 194만원 높게 나온 적 있음). 배당금은 안 들어가요.</p>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
+      <details class="more" data-fold="real-note"${openAttr('real-note')}><summary>계산 방법</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">올해 토스 체결 기준 (판 날 기준, 선입선출). 원화는 산 날·판 날 환율이라 달러와 부호가 다를 수 있음${krw ? ' (주식 = 달러 손익 × 판 날 환율, 환율 = 산 날·판 날 환율 차이)' : ''}. 올해 전에 산 물량·배당금 제외. 토스 앱 숫자와 다를 수 있음 (양도세는 앱보다 약 194만원 높게 나온 적 있음).</p></details>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
   }
   function renderRealized() {
     const box = el('realized'), r = secret && secret.realized, sells = secret && secret.tax && secret.tax.sells;
@@ -774,12 +776,12 @@
       <div class="rrow"><div class="muted">└ 환율 영향 <span class="muted">· 달러 기준 ${pct(h.usdRate)}</span></div><div class="rt mono ${sign(h.fxPl)}">${wonS(h.fxPl)}</div></div>
       <div class="rrow"><div>판 것 + 보유 합계</div><div class="rt mono ${sign(num(t.gainKrw) + h.pl)}">${wonS(num(t.gainKrw) + h.pl)}</div></div>` : '';
     const note = h && h.names ? ` 보유 중 손익은 지금 평가액 × 지금 환율(₩${Math.round(h.fx * 100) / 100}) − 산 날 환율로 계산한 원화 매수금이라 환차손익이 들어가 있고, 아직 안 팔아서 세금엔 안 들어가요.${h.skipped.length ? ` 올해 전에 산 물량이 있어 뺀 종목: ${esc(h.skipped.join(', '))}.` : ''}` : '';
-    box.innerHTML = fold('tax', `${esc(t.year)}년 양도세 <span class="muted" style="font-weight:400;font-size:0.85rem">대략치</span>`, won(t.taxKrw), `
+    box.innerHTML = fold('tax', `${esc(t.year)}년 예상 양도세`, won(t.taxKrw), `
       <div class="rrow"><div>올해 양도차익 <span class="muted">판 것</span></div><div class="rt mono ${sign(t.gainKrw)}">${wonS(t.gainKrw)}</div></div>${hold}
       <div class="rrow"><div>기본공제</div><div class="rt mono">${won(t.deductionKrw)}</div></div>
       <div class="rrow"><div>과세 대상</div><div class="rt mono">${won(t.taxableKrw)}</div></div>
       <div class="rrow"><div><b>예상 양도세</b> <span class="muted">22%</span></div><div class="rt mono"><b>${won(t.taxKrw)}</b></div></div>
-      <details class="more" data-fold="tax-note"${openAttr('tax-note')}><summary>계산 방법 자세히</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">양도차익은 올해 판 것을 선입선출과 매수·매도일 환율로 계산한 값이에요.${unk ? ` 올해 이전에 산 물량이라 평단을 몰라 뺀 매도: ${unk}.` : ''}${note} 신고용이 아니라 감 잡는 용도라, 정확한 값은 증권사 앱의 양도세 조회로 확인하세요.</p></details>`);
+      <details class="more" data-fold="tax-note"${openAttr('tax-note')}><summary>계산 방법</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">양도차익: 올해 매도분, 선입선출 + 매수·매도일 환율.${unk ? ` 평단 몰라 뺀 매도 (올해 전 매수): ${unk}.` : ''}${note} 신고는 증권사 앱 양도세 조회 기준.</p></details>`);
   }
 
   // ---- 다음 주문 계획: 봇이 아직 안 낸 다음 정규장 주문 (가격·수량은 잠금 해제 시)
@@ -789,7 +791,7 @@
     box.hidden = false;
     const sp = secret && secret.nextPlan;
     const ns = data.nextSession;
-    const when = ns && ns.date === n.date ? `${kst(ns.orderAt)} 주문 예정` : '';
+    const when = ns && ns.date === n.date ? `${kst(ns.orderAt)} 주문` : '';
     const head = `${PHASE[n.phase] || ''}${n.t && n.phase !== 'first' ? ` · T ${num(n.t).toFixed(2)}` : ''}${n.starPct && n.phase !== 'first' ? ` · 별% ${pct(n.starPct, 1)}` : ''}`;
     const rows = (n.orders || []).map((o, i) => {
       const so = sp && sp.orders ? sp.orders[i] : null;
@@ -805,7 +807,7 @@
     const notes = sp && sp.notes && sp.notes.length ? `<ul class="notes">${sp.notes.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
     box.innerHTML = `<h2>다음 주문 계획 · ${md(n.date)}</h2>
       <div class="card next">
-        <p class="sub">${esc(head)}${when ? ` · ${when}` : ''}${sp ? '' : ' · 가격·수량은 비밀번호로 열어야 보여요'}</p>
+        <p class="sub">${esc(head)}${when ? ` · ${when}` : ''}${sp ? '' : ' · 가격·수량 잠김'}</p>
         ${kv}
         <div class="day">${rows || '<div class="ord muted">낼 주문 없음</div>'}</div>
         ${n.orders.some(o => o.leg === 'first') && sp ? '<p class="sub" style="margin:8px 0 0">첫 매수 한도가는 주문 직전 현재가로 다시 정해져요.</p>' : ''}
@@ -855,7 +857,7 @@
     const rows = [
       `<div><dt>종가 변동</dt><dd class="mono">${usd(prev)} → ${usd(close)} <span class="${sign(chg)}">${chg === null ? '' : pct(chg, 1)}</span></dd></div>`,
       q0 ? `<div><dt>보유 ${qty(q0)}주 가격 변동</dt><dd class="mono">${sg(held)}</dd></div>` : '',
-      `<div><dt>매수·매도·수수료 몫</dt><dd class="mono">${sg(rest)}</dd></div>`,
+      `<div><dt>매매·수수료</dt><dd class="mono">${sg(rest)}</dd></div>`,
     ];
     if (q1 && num(s.avgAfter)) {
       const avg = num(s.avgAfter), ev = q1 * (close - avg);
@@ -864,9 +866,9 @@
     if (num(s.fx)) {
       const fx = num(s.fx);
       rows.push(`<div><dt>환율</dt><dd class="mono">${fx.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</dd></div>`);
-      rows.push(`<div><dt>일간 손익(원화 어림)</dt><dd class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : '-'}${Math.round(Math.abs(pnl * fx)).toLocaleString('ko-KR')}원</dd></div>`);
+      rows.push(`<div><dt>일간 손익 (원화)</dt><dd class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : '-'}${Math.round(Math.abs(pnl * fx)).toLocaleString('ko-KR')}원</dd></div>`);
     }
-    return `<dl class="kv why">${rows.join('')}</dl><p class="whynote">일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금). 환율은 반영하지 않은 달러 기준이에요.</p>`;
+    return `<dl class="kv why">${rows.join('')}</dl><p class="whynote">일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금) · 달러 기준</p>`;
   }
 
   function dayCard(d, s) {
@@ -897,9 +899,9 @@
     el('days-sym').innerHTML = ordSym ? `<span class="muted" style="font-weight:400;font-size:0.85rem">· ${esc(ordSym)}${fsym ? '' : ' (봇)'}</span>
       <button type="button" class="ghost" id="days-all" style="padding:2px 8px;font-size:0.8rem;margin-left:4px">해제</button>` : '';
     if (ordSym) el('days-all').onclick = () => pickSym(ordSym);
-    if (fsym && !(secret && secret.tax && secret.tax.fills)) { el('days').innerHTML = '<div class="empty"><strong>체결 기록이 아직 안 올라왔어요</strong>봇이 올해 토스 체결을 모으는 중이에요. 보통 몇 분, 길면 6시간 안에 올라와요.</div>'; return; }
+    if (fsym && !(secret && secret.tax && secret.tax.fills)) { el('days').innerHTML = '<div class="empty"><strong>체결 기록 모으는 중</strong>보통 몇 분, 길면 6시간</div>'; return; }
     const days = fsym ? fillDays(fsym) : data.days || [];
-    if (!days.length) { el('days').innerHTML = fsym ? `<div class="empty"><strong>올해 ${esc(fsym)} 체결 기록이 없어요</strong>토스에서 체결된 주문만 보여요.</div>`
+    if (!days.length) { el('days').innerHTML = fsym ? `<div class="empty"><strong>올해 ${esc(fsym)} 체결 기록 없음</strong>토스 체결 주문만 표시</div>`
       : '<div class="empty"><strong>아직 주문 기록이 없어요</strong>첫 정규장 주문 후에 표시됩니다. 가짜 데이터로 미리 보려면 주소 끝에 <span class="mono">?demo=1</span></div>'; return; }
     const byDate = {}, sec = {};
     for (const d of days) byDate[d.date] = d;
@@ -952,7 +954,7 @@
           <span class="cal-sum">${monthPct === null ? '' : `월간 <span class="mono ${sign(monthPct)}">${pct(monthPct, 1)}</span>`}${nPnl ? ` · <span class="mono ${sign(pnl)}">${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''} · ${inMonth.length}거래일</span>
         </div>
         <div class="cal-grid">${['월', '화', '수', '목', '금'].map(w => `<div class="cal-wd">${w}</div>`).join('')}${weeks.filter(w => w.has).flatMap(w => w.cells).join('')}</div>
-        <p class="cal-foot">${fsym ? '올해 토스 체결 기준 (봇 밖 매매 포함) · 몇 시간 늦게 반영될 수 있어요' : '미국 거래일 기준 · 일간 수익률 = 그날 손익 ÷ (전일 종가 평가금 + 그날 매수금)'}</p>
+        <p class="cal-foot">${fsym ? '올해 토스 체결 기준 (봇 밖 매매 포함) · 몇 시간 지연 가능' : '미국 거래일 기준'}</p>
       </div>
       ${fsym ? fillCard(byDate[calPick]) : dayCard(byDate[calPick], sec[calPick])}`;
     el('cal-prev').onclick = () => { calMonth = shiftMonth(calMonth, -1); renderDays(); };
@@ -1075,7 +1077,7 @@
       if (sym !== bookSym) return;   // 받는 사이 탭을 바꿈 → 새 탭 요청이 이미 나가 있음
       if (!res.ok) el('book').innerHTML = `<div class="err">호가를 못 불러왔어요: ${esc(b.error || res.status)}</div>`;
       // 옛 봇은 symbol 을 무시하고 TECL 을 줌
-      else if (String(b.symbol).toUpperCase() !== sym) el('book').innerHTML = `<div class="err">${sym} 호가는 봇 PC를 업데이트하면 보여요.</div>`;
+      else if (String(b.symbol).toUpperCase() !== sym) el('book').innerHTML = `<div class="err">${sym} 호가: 봇 PC 업데이트 필요</div>`;
       else if (bookFold.open) renderBook(b);
     } catch (e) {
       if (!bookOk) return;
@@ -1237,7 +1239,7 @@
       fxHtml = ''; renderTicker();
       if (!marketOpen()) { mktTimer = setTimeout(pollMarket, MKT_MS); return; }
       if (!el('mkt').querySelector('table'))
-        el('mkt').innerHTML = '<div class="err">선물 시세는 봇 PC가 켜져 있을 때 잠금을 풀면 보여요. 봇 PC가 시세를 대신 받아오거든요.</div>';
+        el('mkt').innerHTML = '<div class="err">선물 시세: 봇 PC 켜짐 + 잠금 해제 필요</div>';
     }
     mktTimer = setTimeout(pollMarket, MKT_MS);
   }
@@ -1393,7 +1395,7 @@
 
   function render() {
     if (!data) return;
-    el('subtitle').textContent = `${data.symbol} · 라오어 무한매수법 ${data.splits}분할 · 토스증권`;
+    el('subtitle').textContent = `라오어 ${data.splits}분할 · 토스증권`;
     renderStatus(); renderStats(); renderSecret(); renderAccount(); renderRealized(); renderTax(); renderNext(); renderDays(); renderHistory();
   }
 
@@ -1402,7 +1404,7 @@
       if (!data) { const d = demoData(); data = d.public; secret = d.secret; alt = demoAlt(); pollPerp(); }
       render();
       el('lock').hidden = true;
-      el('notice').innerHTML = '<div class="notice warn">가짜 데이터로 보는 중이에요 (모의 매매 결과). 실제 화면은 주소에서 <span class="mono">?demo=1</span> 을 지우세요.</div>';
+      el('notice').innerHTML = '<div class="notice warn">데모 데이터 (모의 매매) · 실제 화면은 주소에서 <span class="mono">?demo=1</span> 삭제</div>';
       return;
     }
     try {
