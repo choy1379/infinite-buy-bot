@@ -99,12 +99,12 @@ class SyncTest(unittest.TestCase):
         orders = [o("s1", "SELL", "30", "500", "2026-09-28T23:00:00+09:00"), o("b1", "BUY", "20", "400", "2026-09-01T23:00:00+09:00"),
                   o("b2", "BUY", "40", "460", "2026-09-10T23:00:00+09:00"), o("s0", "SELL", "30", "480", "2026-09-20T23:00:00+09:00")]
         got = derive_costs(orders)
-        self.assertEqual(got["s0"], D("440"))  # (20*400+40*460)/60 = 440
-        self.assertEqual(got["s1"], D("440"))  # 팔아도 평단은 그대로
+        self.assertEqual(got["s0"], D("420.043333"))  # 선입선출: (20*400+10*460)/30 = 420 + 매수 수수료
+        self.assertEqual(got["s1"], D("460.026000"))  # 남은 30주는 460에 산 것
         self.assertNotIn("x", derive_costs([o("s", "SELL", "5", "1", "2026-09-28T23:00:00+09:00")]))  # 매수 기록 없으면 모름
         toss = FakeToss(orders, {"items": []})
         new = sync(toss, RealizedLog(self.path), now=datetime(2026, 9, 29, 1, 0, tzinfo=KST))
-        self.assertEqual({r["orderId"]: r["cost"] for r in new}, {"s1": "440", "s0": "440"})
+        self.assertEqual({r["orderId"]: r["cost"] for r in new}, {"s1": "460.026000", "s0": "420.043333"})
         spans = [(c["start"], c["end"]) for c in toss.calls if c.get("symbol") == "DE"]
         self.assertGreater(len(spans), 5)  # 1년을 구간으로 나눠 조회
         self.assertTrue(all(a <= b for a, b in spans))
@@ -116,8 +116,32 @@ class SyncTest(unittest.TestCase):
         toss = FakeToss([SELL_KO, {**BUY_KO, "execution": {**BUY_KO["execution"], "averageFilledPrice": "80", "filledAt": "2026-09-01T10:00:00+09:00"}}], {"items": []})
         sync(toss, RealizedLog(self.path), now=self.now)
         rec = RealizedLog(self.path).sells["k1"]
-        self.assertEqual(rec["cost"], "80")
-        self.assertEqual(rec["plUsd"], "838.66")
+        self.assertEqual(rec["cost"], "80.008667")  # 매수 수수료 1.04 포함
+        self.assertEqual(rec["plUsd"], "837.62")
+
+    def test_sell_before_same_day_buy_uses_fifo_not_later_avg(self):
+        # 10/22 SOXL: 14:44에 40주를 팔고 22:13에 110주를 더 샀다. 나중에 본 보유 평단(89.60)을 원가로 쓰면 안 된다.
+        def o(oid, side, q, px, at, fee="0"):
+            return {**SELL_KO, "orderId": oid, "symbol": "SOXL", "side": side, "orderedAt": at,
+                    "execution": {"filledQuantity": q, "averageFilledPrice": px, "commission": fee, "tax": "0", "filledAt": at}}
+        orders = [o("b1", "BUY", "40", "92.20", "2026-10-21T23:00:00+09:00"), o("s1", "SELL", "40", "93.38", "2026-10-22T14:44:00+09:00"),
+                  o("b2", "BUY", "110", "89.60", "2026-10-22T22:13:00+09:00")]
+        held = {"items": [{"symbol": "SOXL", "name": "SOXL", "quantity": "110", "averagePurchasePrice": "89.60"}]}
+        new = sync(FakeToss(orders, held), RealizedLog(self.path), now=datetime(2026, 10, 23, 1, 0, tzinfo=KST))
+        self.assertEqual([(r["orderId"], r["cost"], r["plUsd"]) for r in new], [("s1", "92.200000", "47.20")])
+
+    def test_old_records_recomputed_once_with_fifo(self):
+        rlog = RealizedLog(self.path)
+        rlog.sells["k1"] = build_record(normalize_sell(SELL_KO), D("70"), D("1388.5"), "x")  # 예전 방식의 틀린 원가
+        rlog.save()
+        buy = {**BUY_KO, "execution": {**BUY_KO["execution"], "averageFilledPrice": "80", "commission": "0", "filledAt": "2026-09-01T10:00:00+09:00"}}
+        toss = FakeToss([SELL_KO, buy], {"items": []})
+        sync(toss, RealizedLog(self.path), now=self.now)
+        self.assertEqual(RealizedLog(self.path).sells["k1"]["cost"], "80.000000")
+        self.assertTrue(RealizedLog(self.path).data["fifo"])
+        toss.calls.clear()
+        sync(toss, RealizedLog(self.path), now=self.now)
+        self.assertFalse([c for c in toss.calls if c.get("symbol")])  # 두 번째부터는 과거 조회 안 함
 
     def test_sync_view_survives_api_failure_and_keeps_old_records(self):
         bot = SimpleNamespace(cfg=SimpleNamespace(run=SimpleNamespace(state_dir=Path(self.tmp.name))), toss=FakeToss([SELL_KO]), symbol="TECL")

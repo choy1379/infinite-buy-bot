@@ -1,8 +1,8 @@
 """봇 밖에서(토스 앱 등) 판 종목의 실현 손익 기록.
 
-토스 Open API 에는 '실현 손익' 조회가 없어서, 종료된 주문 목록(GET /orders?status=CLOSED)의 체결 정보와
-보유 종목의 평균 매수가로 직접 계산한다.
-  손익($) = (체결 평균가 - 평균 매수가) × 체결 수량 - 수수료 - 세금
+토스 Open API 에는 '실현 손익' 조회가 없어서, 종료된 주문 목록(GET /orders?status=CLOSED)의 체결 정보로 직접 계산한다.
+  손익($) = (체결 평균가 - 주당 원가) × 체결 수량 - 수수료 - 세금
+  주당 원가는 최근 1년 체결을 선입선출로 따라가 구하고, 그보다 전에 산 물량이 섞이면 보유 종목의 평균 매수가로 대신한다.
   원화    = 손익($) × 체결 시각의 토스 환율   (토스 앱이 보여주는 원화 손익은 매수 때 환율까지 반영해서 조금 다를 수 있다)
 한 번 기록하면 state/realized.json 에 남겨서, 나중에 평단이 바뀌거나 주문 조회 기간이 지나도 그대로 둔다.
   python -m laoer realized         -> 새로 판 내역을 기록하고 보여줌
@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -96,8 +97,9 @@ def _normalize_fill(order: dict, side: str) -> dict | None:
 
 
 def derive_costs(orders: list[dict]) -> dict[str, Decimal]:
-    """과거 체결(매수·매도)을 시간순으로 따라가 '매도 직전 평균 매수가'를 구한다 (주문번호 -> 평단).
-    매수는 평단에 섞고 매도는 수량만 줄인다. 조회 기간 앞에서 산 물량이 있어 수량이 모자라면 평단을 모르는 걸로 둔다."""
+    """과거 체결(매수·매도)을 시간순으로 따라가 매도마다 주당 취득가를 구한다 (주문번호 -> 주당 원가).
+    선입선출(먼저 산 것부터 판 것으로 봄, 매수 수수료 포함)이라 tax.py·토스 앱과 같은 기준이다.
+    조회 기간 앞에서 산 물량이 있어 수량이 모자라면 원가를 모르는 걸로 둔다."""
     fills = []
     for o in orders:
         f = _normalize_fill(o, "BUY") or _normalize_fill(o, "SELL")
@@ -105,19 +107,26 @@ def derive_costs(orders: list[dict]) -> dict[str, Decimal]:
             f["side"] = str(o.get("side")).upper()
             fills.append(f)
     fills.sort(key=lambda f: f["filledAt"] or "")
-    held: dict[str, list] = {}  # 종목 -> [수량, 평단]
+    lots: dict[str, deque] = {}  # 종목 -> 산 순서대로 [남은 수량, 주당 원가]
     out: dict[str, Decimal] = {}
     for f in fills:
-        pos = held.setdefault(f["symbol"], [Decimal(0), Decimal(0)])
+        q = lots.setdefault(f["symbol"], deque())
         if f["side"] == "BUY":
-            total = pos[0] + f["qty"]
-            pos[1] = (pos[0] * pos[1] + f["qty"] * f["price"]) / total
-            pos[0] = total
-        elif pos[0] >= f["qty"] and pos[0] > 0:
-            out[f["orderId"]] = pos[1]
-            pos[0] -= f["qty"]
-        else:
-            pos[0] = Decimal(0)  # 기간 밖 매수분이 섞여 있어 평단을 알 수 없다
+            q.append([f["qty"], f["price"] + f["commission"] / f["qty"]])
+            continue
+        if sum((lot[0] for lot in q), Decimal(0)) < f["qty"]:
+            q.clear()  # 기간 밖 매수분이 섞여 있어 원가를 알 수 없다
+            continue
+        cost, need = Decimal(0), f["qty"]
+        while need > 0:
+            lot = q[0]
+            take = min(lot[0], need)
+            cost += take * lot[1]
+            lot[0] -= take
+            need -= take
+            if lot[0] == 0:
+                q.popleft()
+        out[f["orderId"]] = (cost / f["qty"]).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
     return out
 
 
@@ -198,20 +207,24 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
     new = []
     recent = toss.closed_orders(start=start)
     fresh = [s for s in map(normalize_sell, recent) if s and s["symbol"] != skip_symbol and s["orderId"] not in rlog.sells]
-    unknown = [r for r in rlog.sells.values() if r.get("cost") is None]
+    # 예전 기록은 '나중에 본 보유 평단'을 원가로 써서 당일 매수 뒤 매도가 틀렸다 -> 한 번 전부 선입선출로 다시 계산
+    redo = not rlog.data.get("fifo")
+    unknown = [r for r in rlog.sells.values() if redo or r.get("cost") is None]
     derived: dict[str, Decimal] = {}
-    need = {x["symbol"] for x in fresh if rlog.costs.get(x["symbol"]) is None} | {r["symbol"] for r in unknown}
+    need = {x["symbol"] for x in fresh} | {r["symbol"] for r in unknown}
     if need:
         # 이미 다 판 종목은 보유 목록에 평단이 없으니, 종목별로 과거 체결을 모아 계산한다 (기간 전체를 한 번에 받으면 서버가 앞부분만 줘서 구간을 나눈다)
         history: dict[str, dict] = {}
+        failed = False
         for sym in sorted(need):
             try:
                 for o in _orders_over_time(toss, sym, now):
                     history[str(o.get("orderId"))] = o
             except Exception as e:
                 log.warning("실현손익: 과거 매수 조회 실패(%s): %s", sym, e)
+                failed = True
         derived = derive_costs(list(history.values()))
-    for rec in unknown:  # 예전에 평단 없이 기록한 매도 보충
+    for rec in unknown:  # 예전에 원가 없이(또는 보유 평단으로) 기록한 매도 다시 계산
         cost = derived.get(rec["orderId"])
         if cost is not None:
             fixed = build_record(_rec_to_sell(rec), cost, _d(rec.get("fx")), rec.get("name"))
@@ -226,12 +239,14 @@ def sync(toss, rlog: RealizedLog, *, skip_symbol: str | None = None, days: int =
                 fx = toss.exchange_rate(sell["filledAt"])
             except Exception as e:
                 log.warning("실현손익: 환율 조회 실패(%s): %s", sell["symbol"], e)
-        cost = _d(rlog.costs.get(sell["symbol"]))
-        if cost is None:
-            cost = derived.get(sell["orderId"])
+        cost = derived.get(sell["orderId"])
+        if cost is None:  # 1년보다 전에 산 물량이 섞이면 마지막으로 본 보유 평단으로
+            cost = _d(rlog.costs.get(sell["symbol"]))
         rec = build_record(sell, cost, fx, names.get(sell["symbol"]))
         rlog.sells[sell["orderId"]] = rec
         new.append(rec)
+    if redo and not (need and failed):  # 조회가 실패했으면 다음에 다시 계산
+        rlog.data["fifo"] = True
     if new or held or unknown:
         rlog.save()
     return new
