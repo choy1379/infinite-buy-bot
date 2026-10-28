@@ -597,16 +597,22 @@
     box.hidden = false;
     const h = secret.holding, c = secret.cycle || {};
     const value = h ? num(h.qty) * num(h.lastPrice) : null;
+    // 원 탭: 지금 환율로 환산한 대략치 (실현 손익 카드와 같은 $|원 선택을 같이 씀). 평단은 달러 가격이라 그대로
+    const fx = num(secret.fx), krw = rCur === 'KRW' && fx;
+    const m = v => num(v) === null ? '–' : krw ? money(num(v) * fx, 'KRW') : usd(v);
     box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-        <h2 style="margin:0">금액 정보</h2><button class="ghost" id="relock" type="button">다시 잠그기</button></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <h2 style="margin:0">금액 정보</h2>
+        ${fx ? `<div class="tabs mini" role="tablist" aria-label="통화">${['USD', 'KRW'].map(c =>
+          `<button type="button" role="tab" data-rcur="${c}" aria-selected="${c === (krw ? 'KRW' : 'USD')}">${c === 'USD' ? '$' : '원'}</button>`).join('')}</div>` : ''}
+        <button class="ghost" id="relock" type="button" style="margin-left:auto">다시 잠그기</button></div>
       <dl class="kv">
         <div><dt>보유</dt><dd class="mono">${h ? `${qty(h.qty)}주 · 평단 ${usd(h.avg)}` : '0주'}</dd></div>
-        <div><dt>평가금액</dt><dd class="mono">${value === null ? '–' : usd(value)}</dd></div>
-        <div><dt>매수가능</dt><dd class="mono">${usd(secret.cash)}</dd></div>
-        <div><dt>사이클 원금</dt><dd class="mono">${usd(c.seed)} · 1회 ${usd(c.unit)}</dd></div>
-        <div><dt>누적 매수·매도</dt><dd class="mono">${usd(c.bought)} · ${usd(c.sold)}</dd></div>
-      </dl>`;
+        <div><dt>평가금액</dt><dd class="mono">${value === null ? '–' : m(value)}</dd></div>
+        <div><dt>매수가능</dt><dd class="mono">${m(secret.cash)}</dd></div>
+        <div><dt>사이클 원금</dt><dd class="mono">${m(c.seed)} · 1회 ${m(c.unit)}</dd></div>
+        <div><dt>누적 매수·매도</dt><dd class="mono">${m(c.bought)} · ${m(c.sold)}</dd></div>
+      </dl>${krw ? `<p class="muted" style="font-size:0.75rem;margin:6px 0 0">지금 환율 ₩${Math.round(fx * 100) / 100}로 바꾼 대략치예요.</p>` : ''}`;
     el('relock').addEventListener('click', lockAgain);
   }
 
@@ -727,7 +733,13 @@
       const months = [...new Set(secret.tax.sells.map(x => x.date.slice(0, 7)))].sort();
       rMonth = months[months.indexOf(rMonth) + Number(b.dataset.rm)] || rMonth;
     }
-    renderRealized();
+    renderRealized(); renderSecret();
+  });
+  el('secret').addEventListener('click', e => {
+    const b = e.target.closest('button[data-rcur]');
+    if (!b) return;
+    rCur = b.dataset.rcur; try { localStorage.setItem('tecl-dashboard-realized-cur', rCur); } catch (er) {}
+    renderSecret(); renderRealized();
   });
 
   // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
