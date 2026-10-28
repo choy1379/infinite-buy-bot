@@ -672,12 +672,16 @@
     const i = months.indexOf(rMonth), k = rCur === 'KRW' ? 'Krw' : 'Usd';
     const by = {};
     for (const x of sells.filter(x => x.date.startsWith(rMonth))) {
-      const b = by[x.symbol] ||= { pl: 0, cost: 0 };
+      const b = by[x.symbol] ||= { pl: 0, cost: 0, stock: 0 };
       b.pl += num(x['pl' + k]) || 0; b.cost += num(x['cost' + k]) || 0;
+      // 판 날 환율 = 원화 매도금 ÷ 달러 매도금 (둘 다 수수료·세금 뺀 값이라 tax.py 계산과 같음)
+      const usdIn = (num(x.plUsd) || 0) + (num(x.costUsd) || 0), fx = usdIn ? ((num(x.plKrw) || 0) + (num(x.costKrw) || 0)) / usdIn : 0;
+      b.stock += (num(x.plUsd) || 0) * fx;
     }
     const f = v => rCur === 'KRW' ? (v > 0 ? '+' : v < 0 ? '-' : '') + '₩' + Math.abs(Math.round(v)).toLocaleString('ko-KR') : sgnMoney(v, 'USD');
     const rows = Object.entries(by).sort((a, b) => b[1].pl - a[1].pl);
-    const tot = rows.reduce((t, [, b]) => ({ pl: t.pl + b.pl, cost: t.cost + b.cost }), { pl: 0, cost: 0 });
+    const tot = rows.reduce((t, [, b]) => ({ pl: t.pl + b.pl, cost: t.cost + b.cost, stock: t.stock + b.stock }), { pl: 0, cost: 0, stock: 0 });
+    const krw = rCur === 'KRW', fxe = b => `<span class="${sign(b.pl - b.stock)}">환율 ${f(b.pl - b.stock)}</span>`;
     const r = b => b.cost ? b.pl / b.cost : null;
     return [`<div class="cal-head">
         <button type="button" class="ghost nav" data-rm="-1" ${i <= 0 ? 'disabled' : ''} aria-label="이전 달">‹</button>
@@ -686,10 +690,11 @@
         <div class="tabs mini" role="tablist" aria-label="통화" style="margin-left:auto">${['USD', 'KRW'].map(c =>
           `<button type="button" role="tab" data-rcur="${c}" aria-selected="${c === rCur}">${c === 'USD' ? '$' : '원'}</button>`).join('')}</div></div>
       <div class="mono ${sign(tot.pl)}" style="font-size:1.6rem;font-weight:700;margin:6px 0 2px">${f(tot.pl)} <span style="font-size:0.95rem">(${r(tot) === null ? '–' : pct(r(tot))})</span></div>
+      ${krw ? `<div class="mono" style="font-size:0.85rem"><span class="${sign(tot.stock)}">주식 ${f(tot.stock)}</span> · ${fxe(tot)}</div>` : ''}
       <p class="muted" style="font-size:0.85rem;margin:10px 0 0">${Number(rMonth.slice(5))}월 종목별 합계</p>
       ${rows.map(([sym, b]) => `<div class="rrow"><div class="nm">${esc(sym)}</div>
-        <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div></div></div>`).join('')}
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 토스 체결로 계산 (판 날 기준, 먼저 산 것부터 판 걸로 봄). 원화는 산 날·판 날 환율이라 환차손익이 들어가서 달러와 부호가 다를 수 있어요. 올해 전에 산 물량은 빠지고, 토스 앱 숫자와 다를 수 있어요 (양도세 대략치는 앱보다 약 194만원 높게 나온 적 있음). 배당금은 안 들어가요.</p>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
+        <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div>${krw ? `<div class="sub mono">${fxe(b)}</div>` : ''}</div></div>`).join('')}
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 토스 체결로 계산 (판 날 기준, 먼저 산 것부터 판 걸로 봄). 원화는 산 날·판 날 환율이라 환차손익이 들어가서 달러와 부호가 다를 수 있어요${krw ? ' (주식 = 달러 손익 × 판 날 환율, 환율 = 산 날과 판 날 환율 차이로 생긴 몫)' : ''}. 올해 전에 산 물량은 빠지고, 토스 앱 숫자와 다를 수 있어요 (양도세 대략치는 앱보다 약 194만원 높게 나온 적 있음). 배당금은 안 들어가요.</p>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
   }
   function renderRealized() {
     const box = el('realized'), r = secret && secret.realized, sells = secret && secret.tax && secret.tax.sells;
