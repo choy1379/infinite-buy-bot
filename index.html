@@ -681,7 +681,7 @@
     const f = v => rCur === 'KRW' ? (v > 0 ? '+' : v < 0 ? '-' : '') + '₩' + Math.abs(Math.round(v)).toLocaleString('ko-KR') : sgnMoney(v, 'USD');
     const rows = Object.entries(by).sort((a, b) => b[1].pl - a[1].pl);
     const tot = rows.reduce((t, [, b]) => ({ pl: t.pl + b.pl, cost: t.cost + b.cost, stock: t.stock + b.stock }), { pl: 0, cost: 0, stock: 0 });
-    const krw = rCur === 'KRW', fxe = b => `<span class="${sign(b.pl - b.stock)}">환율 ${f(b.pl - b.stock)}</span>`;
+    const krw = rCur === 'KRW', fxe = b => `<span class="muted" style="font-size:0.75rem">환율 ${f(b.pl - b.stock)}</span>`;  // 환율 몫은 눈에 덜 띄게 (숫자는 그대로)
     const r = b => b.cost ? b.pl / b.cost : null;
     return [`<div class="cal-head">
         <button type="button" class="ghost nav" data-rm="-1" ${i <= 0 ? 'disabled' : ''} aria-label="이전 달">‹</button>
@@ -690,7 +690,8 @@
         <div class="tabs mini" role="tablist" aria-label="통화" style="margin-left:auto">${['USD', 'KRW'].map(c =>
           `<button type="button" role="tab" data-rcur="${c}" aria-selected="${c === rCur}">${c === 'USD' ? '$' : '원'}</button>`).join('')}</div></div>
       <div class="mono ${sign(tot.pl)}" style="font-size:1.6rem;font-weight:700;margin:6px 0 2px">${f(tot.pl)} <span style="font-size:0.95rem">(${r(tot) === null ? '–' : pct(r(tot))})</span></div>
-      ${krw ? `<div class="mono" style="font-size:0.85rem"><span class="${sign(tot.stock)}">주식 ${f(tot.stock)}</span> · ${fxe(tot)}</div>` : ''}
+      ${krw ? `<div class="mono" style="font-size:0.85rem"><span class="${sign(tot.stock)}">주식 ${f(tot.stock)}</span> · ${fxe(tot)}</div>
+        <p class="muted" style="font-size:0.75rem;margin:2px 0 0">환율 몫은 주식이 아니라 환율이 움직여 생긴 값이에요 (달러를 원화로 바꿀 때 실제로 정해져요). 양도세는 원화 합계 기준이에요.</p>` : ''}
       <p class="muted" style="font-size:0.85rem;margin:10px 0 0">${Number(rMonth.slice(5))}월 종목별 합계</p>
       ${rows.map(([sym, b]) => `<div class="rrow"><div class="nm">${esc(sym)}</div>
         <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div>${krw ? `<div class="sub mono">${fxe(b)}</div>` : ''}</div></div>`).join('')}
