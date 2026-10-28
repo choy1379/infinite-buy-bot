@@ -50,7 +50,7 @@ class TaxLog:
 
     def stale(self, now: datetime) -> bool:
         at = self.data.get("at")
-        if not at or not self.data.get("result") or "fills" not in self.data["result"]:  # 예전 형식이면 바로 다시 계산
+        if not at or not self.data.get("result") or "sells" not in self.data["result"]:  # 예전 형식이면 바로 다시 계산
             return True
         return now - datetime.fromisoformat(at) >= MAX_AGE
 
@@ -83,6 +83,7 @@ def compute(orders: list[dict], fx_of) -> dict:
     fills.sort(key=lambda f: f["filledAt"] or "")
     lots: dict[str, deque] = {}  # 종목 -> 산 순서대로 [남은 수량, 주당 원화 취득가] (선입선출)
     by_symbol: dict[str, Decimal] = {}
+    sells = []  # 대시보드 '실현 손익' 월별·종목별 보기용 매도 1건씩
     unknown: dict[str, int] = {}
     total = Decimal(0)
     for f in fills:
@@ -96,17 +97,22 @@ def compute(orders: list[dict], fx_of) -> dict:
             unknown[f["symbol"]] = unknown.get(f["symbol"], 0) + 1
             q.clear()
             continue
-        cost, need = Decimal(0), f["qty"]
+        cost, cost_usd, need = Decimal(0), Decimal(0), f["qty"]
         while need > 0:
             lot = q[0]
             take = min(lot[0], need)
             cost += take * lot[1]
+            cost_usd += take * lot[2]
             lot[0] -= take
             need -= take
             if lot[0] == 0:
                 q.popleft()
         gain = (f["qty"] * f["price"] - f["commission"] - f["tax"]) * fx - cost
         by_symbol[f["symbol"]] = by_symbol.get(f["symbol"], Decimal(0)) + gain
+        pl_usd = f["qty"] * f["price"] - f["commission"] - f["tax"] - cost_usd
+        sells.append({"symbol": f["symbol"], "date": _kst_date(f["filledAt"]), "plUsd": str(pl_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                      "costUsd": str(cost_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)), "plKrw": str(gain.quantize(WON, rounding=ROUND_HALF_UP)),
+                      "costKrw": str(cost.quantize(WON, rounding=ROUND_HALF_UP))})
         total += gain
     taxable = max(Decimal(0), total - DEDUCTION)
     open_ = {}  # 아직 안 판 물량의 원화·달러 취득가 (보유 종목 원화 실손익 계산용)
@@ -127,6 +133,7 @@ def compute(orders: list[dict], fx_of) -> dict:
         "bySymbol": {s: str(v.quantize(WON, rounding=ROUND_HALF_UP)) for s, v in sorted(by_symbol.items())},
         "unknown": unknown,
         "open": open_,
+        "sells": sells,
         "fills": sorted(listed, key=lambda f: f["at"] or ""),
     }
 

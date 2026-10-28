@@ -660,13 +660,44 @@
     box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span> <span class="stamp">${stamp}</span></h2>${rows}<div class="tot">${tots}</div>`;
   }
 
-  // ---- 실현 손익 기록: 봇 밖(토스 앱 등)에서 판 종목. 달러 손익 + 매도 시점 환율로 환산한 원화 (잠금 해제 시)
+  // ---- 실현 손익 (잠금 해제 시): 위는 월별·종목별 합계 (올해 토스 체결, 양도세 카드와 같은 선입선출 계산, 봇 종목 포함),
+  //      아래는 봇 밖(토스 앱 등)에서 판 건별 기록. 달러 손익 + 매도 시점 환율로 환산한 원화
+  let rMonth = null, rCur = 'USD';
+  try { if (localStorage.getItem('tecl-dashboard-realized-cur') === 'KRW') rCur = 'KRW'; } catch (e) {}
+  function realizedMonth(sells) {
+    if (!sells) return ['<p class="muted" style="font-size:0.85rem;margin:0">월별 보기는 봇 업데이트 후에 보여요.</p>', null];
+    if (!sells.length) return ['<p class="muted" style="font-size:0.85rem;margin:0">올해 판 기록이 아직 없어요.</p>', null];
+    const months = [...new Set(sells.map(x => x.date.slice(0, 7)))].sort();
+    if (!months.includes(rMonth)) rMonth = months[months.length - 1];
+    const i = months.indexOf(rMonth), k = rCur === 'KRW' ? 'Krw' : 'Usd';
+    const by = {};
+    for (const x of sells.filter(x => x.date.startsWith(rMonth))) {
+      const b = by[x.symbol] ||= { pl: 0, cost: 0 };
+      b.pl += num(x['pl' + k]) || 0; b.cost += num(x['cost' + k]) || 0;
+    }
+    const f = v => rCur === 'KRW' ? (v > 0 ? '+' : v < 0 ? '-' : '') + '₩' + Math.abs(Math.round(v)).toLocaleString('ko-KR') : sgnMoney(v, 'USD');
+    const rows = Object.entries(by).sort((a, b) => b[1].pl - a[1].pl);
+    const tot = rows.reduce((t, [, b]) => ({ pl: t.pl + b.pl, cost: t.cost + b.cost }), { pl: 0, cost: 0 });
+    const r = b => b.cost ? b.pl / b.cost : null;
+    return [`<div class="cal-head">
+        <button type="button" class="ghost nav" data-rm="-1" ${i <= 0 ? 'disabled' : ''} aria-label="이전 달">‹</button>
+        <strong>${Number(rMonth.slice(5))}월 실현손익</strong>
+        <button type="button" class="ghost nav" data-rm="1" ${i >= months.length - 1 ? 'disabled' : ''} aria-label="다음 달">›</button>
+        <div class="tabs mini" role="tablist" aria-label="통화" style="margin-left:auto">${['USD', 'KRW'].map(c =>
+          `<button type="button" role="tab" data-rcur="${c}" aria-selected="${c === rCur}">${c === 'USD' ? '$' : '원'}</button>`).join('')}</div></div>
+      <div class="mono ${sign(tot.pl)}" style="font-size:1.6rem;font-weight:700;margin:6px 0 2px">${f(tot.pl)} <span style="font-size:0.95rem">(${r(tot) === null ? '–' : pct(r(tot))})</span></div>
+      <p class="muted" style="font-size:0.85rem;margin:10px 0 0">${Number(rMonth.slice(5))}월 종목별 합계</p>
+      ${rows.map(([sym, b]) => `<div class="rrow"><div class="nm">${esc(sym)}</div>
+        <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div></div></div>`).join('')}
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">올해 토스 체결로 계산 (판 날 기준, 먼저 산 것부터 판 걸로 봄). 원화는 산 날·판 날 환율이라 환차손익이 들어가서 달러와 부호가 다를 수 있어요. 올해 전에 산 물량은 빠지고, 토스 앱 숫자와 다를 수 있어요 (양도세 대략치는 앱보다 약 194만원 높게 나온 적 있음). 배당금은 안 들어가요.</p>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
+  }
   function renderRealized() {
-    const box = el('realized'), r = secret && secret.realized;
-    if (!r || !(r.items || []).length) { box.hidden = true; return; }
+    const box = el('realized'), r = secret && secret.realized, sells = secret && secret.tax && secret.tax.sells;
+    const items = (r && r.items) || [];
+    if (!items.length && !sells) { box.hidden = true; return; }
     box.hidden = false;
     const wonS = v => num(v) === null ? '–' : (num(v) < 0 ? '-' : (num(v) > 0 ? '+' : '')) + '₩' + Math.abs(Math.round(num(v))).toLocaleString('ko-KR');
-    const rows = r.items.map(it => {
+    const rows = items.map(it => {
       const cur = it.currency || 'USD';
       return `<div class="rrow">
         <div style="min-width:0"><div class="nm">${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span></div>
@@ -674,12 +705,24 @@
         <div class="rt"><div class="mono ${sign(cur === 'KRW' ? it.plKrw : it.plUsd)}">${cur === 'KRW' ? wonS(it.plKrw) : sgnMoney(it.plUsd, 'USD')}</div>
           ${cur === 'KRW' ? '' : `<div class="sub mono ${sign(it.plKrw)}">${wonS(it.plKrw)}</div>`}</div></div>`;
     }).join('');
-    const tot = `<span>합계 <span class="mono ${sign(r.totalUsd)}">${num(r.totalUsd) === null ? '' : sgnMoney(r.totalUsd, 'USD')}</span>
+    const tot = r && `<span>합계 <span class="mono ${sign(r.totalUsd)}">${num(r.totalUsd) === null ? '' : sgnMoney(r.totalUsd, 'USD')}</span>
       <span class="mono ${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span></span>`;
-    const sum = `<span class="${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span>`;
-    box.innerHTML = fold('realized', '실현 손익 기록', sum, `<p class="muted" style="font-size:0.85rem;margin:0">봇 밖에서 판 내역</p>${rows}<div class="tot">${tot}</div>
-      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p>`);
+    const [month, mSum] = realizedMonth(sells);
+    const sum = mSum || (r ? `<span class="${sign(r.totalKrw)}">${num(r.totalKrw) === null ? '' : wonS(r.totalKrw)}</span>` : '');
+    const list = items.length ? `<details class="more" data-fold="realized-list"${openAttr('realized-list')}><summary>봇 밖에서 판 내역 (건별)</summary>${rows}<div class="tot">${tot}</div>
+      <p class="muted" style="font-size:0.75rem;margin:8px 0 0">손익 = (매도가 − 평단) × 수량 − 수수료·세금. 원화는 매도 시점 환율로 환산한 값이라, 토스 앱 숫자와 조금 다를 수 있어요.</p></details>` : '';
+    box.innerHTML = fold('realized', '실현 손익', sum, month + list);
   }
+  el('realized').addEventListener('click', e => {
+    const b = e.target.closest('button[data-rm], button[data-rcur]');
+    if (!b) return;
+    if (b.dataset.rcur) { rCur = b.dataset.rcur; try { localStorage.setItem('tecl-dashboard-realized-cur', rCur); } catch (er) {} }
+    else {
+      const months = [...new Set(secret.tax.sells.map(x => x.date.slice(0, 7)))].sort();
+      rMonth = months[months.indexOf(rMonth) + Number(b.dataset.rm)] || rMonth;
+    }
+    renderRealized();
+  });
 
   // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
   //      + 보유 중인 달러 종목의 원화 실손익: 지금 평가액 × 지금 환율 − 매수일 환율로 산 원화 취득가 (환차손익 포함)
@@ -1299,7 +1342,11 @@
         cycle: { seed: String(SEED), unit: String(UNIT), bought: bought.toFixed(2), sold: sold.toFixed(2) },
         days: sec.reverse(), history: hsec, nextPlan: nextSec,
         realized: { items: [{ symbol: 'KO', name: '코카콜라', currency: 'USD', date: '2026-10-08', qty: '120', price: '87.00', cost: '87.74', plUsd: '-89.40', plKrw: '-124000', fx: '1388.5' }], totalUsd: '-89.40', totalKrw: '-124000' },
-        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 }, fills: [
+        tax: { year: 2026, gainKrw: '3800000', deductionKrw: '2500000', taxableKrw: '1300000', taxKrw: '286000', bySymbol: { TECL: '3900000', KO: '-100000' }, unknown: { DE: 2 }, sells: [
+          { symbol: 'KO', date: '2026-10-09', plUsd: '-92.40', costUsd: '2896.00', plKrw: '-131500', costKrw: '4040000' },
+          { symbol: 'SOXL', date: '2026-10-15', plUsd: '172.24', costUsd: '14353.00', plKrw: '-52000', costKrw: '20380000' },
+          { symbol: 'TECL', date: '2026-09-22', plUsd: '2810.00', costUsd: '20600.00', plKrw: '3900000', costKrw: '28220000' },
+        ], fills: [
           { symbol: 'KO', side: 'BUY', qty: '120', price: '72.40', currency: 'USD', at: '2026-09-15T14:02:00Z' },
           { symbol: 'KO', side: 'SELL', qty: '40', price: '70.10', currency: 'USD', at: '2026-10-08T15:44:00Z' },
           { symbol: 'KO', side: 'BUY', qty: '40', price: '67.20', currency: 'USD', at: '2026-10-09T19:30:00Z' },
