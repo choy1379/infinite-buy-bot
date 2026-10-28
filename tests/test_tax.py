@@ -72,6 +72,15 @@ class ComputeTest(unittest.TestCase):
         # 남은 건 두 번째로 산 8주 (120$, 1400원)
         self.assertEqual(r["open"], {"AAA": {"qty": "8", "costKrw": str(8 * 120 * 1400), "costUsd": "960.00"}})
 
+    def test_sells_list_usd_and_krw_per_sale(self):
+        orders = [
+            order("b", "AAA", "BUY", 10, 100, "2026-03-01T10:00:00+09:00", fee="1"),
+            order("s", "AAA", "SELL", 5, 110, "2026-06-01T10:00:00+09:00", fee="1"),
+        ]
+        s = compute(orders, fx_of)["sells"]
+        # 달러: 5*110-1 - 5*(1001/10) = 549 - 500.5, 원화: 549*1400 - 500.5*1300
+        self.assertEqual(s, [{"symbol": "AAA", "date": "2026-06-01", "plUsd": "48.50", "costUsd": "500.50", "plKrw": str(549 * 1400 - 650650), "costKrw": "650650"}])
+
     def test_sell_without_known_buy_is_left_out_and_counted(self):
         orders = [order("s", "OLD", "SELL", 5, 90, "2026-06-01T10:00:00+09:00")]
         r = compute(orders, fx_of)
