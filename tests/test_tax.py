@@ -81,6 +81,18 @@ class ComputeTest(unittest.TestCase):
         # 달러: 5*110-1 - 5*(1001/10) = 549 - 500.5, 원화: 549*1400 - 500.5*1300
         self.assertEqual(s, [{"symbol": "AAA", "date": "2026-06-01", "plUsd": "48.50", "costUsd": "500.50", "plKrw": str(549 * 1400 - 650650), "costKrw": "650650"}])
 
+    def test_sells_list_uses_average_cost_but_tax_stays_fifo(self):
+        orders = [
+            order("b1", "AAA", "BUY", 10, 100, "2026-03-01T10:00:00+09:00"),
+            order("b2", "AAA", "BUY", 10, 120, "2026-06-01T10:00:00+09:00"),
+            order("s1", "AAA", "SELL", 10, 115, "2026-06-01T11:00:00+09:00"),
+            order("s2", "AAA", "SELL", 10, 115, "2026-06-01T12:00:00+09:00"),
+        ]
+        r = compute(orders, fx_of)
+        # 평단 110$ → 매도마다 +50$ (선입선출이면 +150$, -50$)
+        self.assertEqual([x["plUsd"] for x in r["sells"]], ["50.00", "50.00"])
+        self.assertEqual(r["gainKrw"], str(20 * 115 * 1400 - (1000 * 1300 + 1200 * 1400)))
+
     def test_sell_without_known_buy_is_left_out_and_counted(self):
         orders = [order("s", "OLD", "SELL", 5, 90, "2026-06-01T10:00:00+09:00")]
         r = compute(orders, fx_of)

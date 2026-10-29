@@ -668,7 +668,7 @@
     box.innerHTML = `<h2>계좌 전체 <span class="muted" style="font-weight:400;font-size:0.85rem">${items.length}종목</span> <span class="stamp">${stamp}</span></h2>${rows}<div class="tot">${tots}</div>`;
   }
 
-  // ---- 실현 손익 (잠금 해제 시): 위는 월별·종목별 합계 (올해 토스 체결, 양도세 카드와 같은 선입선출 계산, 봇 종목 포함),
+  // ---- 실현 손익 (잠금 해제 시): 위는 월별·종목별 합계 (올해 토스 체결, 평균단가 계산 = 토스 앱 방식, 봇 종목 포함),
   //      아래는 봇 밖(토스 앱 등)에서 판 건별 기록. 달러 손익 + 매도 시점 환율로 환산한 원화
   let rMonth = null, rCur = 'USD';
   try { if (localStorage.getItem('tecl-dashboard-realized-cur') === 'KRW') rCur = 'KRW'; } catch (e) {}
@@ -703,7 +703,7 @@
       <p class="muted" style="font-size:0.85rem;margin:10px 0 0">${Number(rMonth.slice(5))}월 종목별 합계</p>
       ${rows.map(([sym, b]) => `<div class="rrow"><div class="nm">${esc(sym)}</div>
         <div class="rt"><div class="mono ${sign(b.pl)}">${f(b.pl)}</div><div class="sub mono ${sign(b.pl)}">${r(b) === null ? '–' : pct(r(b))}</div>${krw ? `<div class="sub mono">${fxe(b)}</div>` : ''}</div></div>`).join('')}
-      <details class="more" data-fold="real-note"${openAttr('real-note')}><summary>계산 방법</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">올해 토스 체결 기준 (판 날 기준, 선입선출). 원화는 산 날·판 날 환율이라 달러와 부호가 다를 수 있음${krw ? ' (주식 = 달러 손익 × 판 날 환율, 환율 = 산 날·판 날 환율 차이)' : ''}. 올해 전에 산 물량·배당금 제외. 토스 앱 숫자와 다를 수 있음 (양도세는 앱보다 약 194만원 높게 나온 적 있음).</p></details>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
+      <details class="more" data-fold="real-note"${openAttr('real-note')}><summary>계산 방법</summary><p class="muted" style="font-size:0.75rem;margin:6px 0 0">올해 토스 체결 기준 (판 날 기준, 평균단가 = 토스 앱 방식, 양도세 카드는 선입선출). 원화는 산 날·판 날 환율이라 달러와 부호가 다를 수 있음${krw ? ' (주식 = 달러 손익 × 판 날 환율, 환율 = 산 날·판 날 환율 차이)' : ''}. 올해 전에 산 물량·배당금 제외.</p></details>`, `${Number(rMonth.slice(5))}월 <span class="${sign(tot.pl)}">${f(tot.pl)}</span>`];
   }
   function renderRealized() {
     const box = el('realized'), r = secret && secret.realized, sells = secret && secret.tax && secret.tax.sells;
