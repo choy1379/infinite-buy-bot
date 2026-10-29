@@ -614,8 +614,24 @@
         <div><dt>매수가능</dt><dd class="mono">${m(secret.cash)}</dd></div>
         <div><dt>사이클 원금</dt><dd class="mono">${m(c.seed)} · 1회 ${m(c.unit)}</dd></div>
         <div><dt>누적 매수·매도</dt><dd class="mono">${m(c.bought)} · ${m(c.sold)}</dd></div>
-      </dl>${krw ? `<p class="muted" style="font-size:0.75rem;margin:6px 0 0">환율 ₩${Math.round(fx * 100) / 100} 기준 환산</p>` : ''}`;
+      </dl>${quarterFold(m)}${krw ? `<p class="muted" style="font-size:0.75rem;margin:6px 0 0">환율 ₩${Math.round(fx * 100) / 100} 기준 환산</p>` : ''}`;
     el('relock').addEventListener('click', lockAgain);
+  }
+
+  // ---- 쿼터매도 체결만: (체결가 - 그날 주문 전 평단) × 수량. 봇 장부 기준(최근 120일, 수수료 전)이라 실현 손익 카드(토스 평균단가)와 다름
+  function quarterFold(m) {
+    const rows = [];
+    for (const d of secret.days || []) for (const o of d.orders || []) {
+      const q = num(o.filledQty), px = num(o.filledAvg), avg = num(d.avgBefore);
+      if (o.leg === 'quarter' && q && px && avg) rows.push({ date: d.date, q, px, pl: q * (px - avg), rate: px / avg - 1 });
+    }
+    if (!rows.length) return '';
+    const pl = rows.reduce((a, r) => a + r.pl, 0), cost = rows.reduce((a, r) => a + r.q * r.px - r.pl, 0);
+    return `<details class="more" data-fold="quarter"${openAttr('quarter')}><summary>쿼터매도 ${rows.length}번 · <span class="mono ${sign(pl)}">${pl > 0 ? '+' : ''}${m(pl)} (${pct(pl / cost)})</span></summary>
+      <div class="table-wrap"><table><thead><tr><th>날짜</th><th class="num">수량</th><th class="num">체결가</th><th class="num">손익</th><th class="num">평단 대비</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td class="mono">${md(r.date)}</td><td class="num mono">${qty(r.q)}</td><td class="num mono">${usd(r.px)}</td>
+        <td class="num mono ${sign(r.pl)}">${r.pl > 0 ? '+' : ''}${m(r.pl)}</td><td class="num mono ${sign(r.rate)}">${pct(r.rate)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="muted" style="font-size:0.75rem;margin:6px 0 0">봇 장부 평단 기준, 수수료 전, 최근 120일. 실현 손익 카드와 별개.</p></details>`;
   }
 
   // ---- 계좌 전체: 봇 종목 외 보유 종목까지 (잠금 해제 시). 로고는 공개 로고 이미지, 없으면 글자
@@ -1321,7 +1337,7 @@
       }
       close = r2(p0 * (1 + 0.035 * gauss() + 0.003));   // TECL 은 3배 레버리지라 하루 ±3~4% 가 흔함
       const high = r2(Math.max(close, p0) * (1 + rnd() * 0.025));
-      const qty0 = qty;
+      const qty0 = qty, avg0 = avg;
       let buyAmt = 0, sellAmt = 0, left = qty;
       const fills = legs.map(o => {
         let px = null;
@@ -1337,7 +1353,7 @@
       const v0 = qty0 * p0, pnl = qty * close - v0 - buyAmt + sellAmt, base = v0 + buyAmt;
       pub.push({ date, status: 'placed', phase, t: dayT, starPct, reported: true, dailyPct: base ? (pnl / base * 100).toFixed(2) : null,
         orders: legs.map((o, k) => ({ leg: o.leg, side: o.side, tif: o.tif, status: fills[k].q ? 'filled' : 'unfilled' })) });
-      sec.push({ date, price: String(p0), qtyBefore: String(qty0), qtyAfter: String(qty), avgAfter: qty ? avg.toFixed(4) : '0', close: String(close), prevClose: String(p0), fx: String(1380 + Math.round(rnd() * 20)), pnl: pnl.toFixed(2),
+      sec.push({ date, price: String(p0), qtyBefore: String(qty0), avgBefore: qty0 ? avg0.toFixed(4) : '0', qtyAfter: String(qty), avgAfter: qty ? avg.toFixed(4) : '0', close: String(close), prevClose: String(p0), fx: String(1380 + Math.round(rnd() * 20)), pnl: pnl.toFixed(2),
         orders: legs.map((o, k) => ({ leg: o.leg, price: String(o.price), qty: o.qty, filledQty: String(fills[k].q), filledAvg: fills[k].px === null ? null : String(fills[k].px) })) });
       if (qty0 && !qty) {   // 다 팔림 → 사이클 완료
         const profit = sold - bought;
