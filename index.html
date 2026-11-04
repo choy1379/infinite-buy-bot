@@ -566,7 +566,10 @@
     const dLv = rate < 0 ? dropLv(day) : 0;
     const plUsd = live ? num(live.pl) : h ? num(h.qty) * (num(secret.price) - num(h.avg)) : null;
     const fx = secret ? num(secret.fx) : null;
-    const amt = plUsd === null || Number.isNaN(plUsd) ? '' : `<div class="amt mono ${sign(plUsd)}">${plUsd >= 0 ? '+' : ''}${usd(plUsd)}${fx ? ` · ${plUsd >= 0 ? '+' : '-'}₩${Math.round(Math.abs(plUsd * fx)).toLocaleString('ko-KR')}` : ''}</div>`;
+    // 원화: 토스 원화 탭처럼 지금 평가액 × 지금 환율 − 산 날 환율 원가 (환차손익 포함). 원가를 모르면 달러 손익 × 지금 환율
+    const oc = live && fx ? openCost(live) : null;
+    const plKrw = oc && num(live.value) !== null ? num(live.value) * fx - oc.krw : plUsd !== null && fx ? plUsd * fx : null;
+    const amt = plUsd === null || Number.isNaN(plUsd) ? '' : `<div class="amt mono ${sign(plUsd)}">${plUsd >= 0 ? '+' : ''}${usd(plUsd)}${plKrw !== null ? ` · <span class="${sign(plKrw)}">${plKrw >= 0 ? '+' : '-'}₩${Math.round(Math.abs(plKrw)).toLocaleString('ko-KR')}</span>` : ''}</div>`;
     const tgt = num(data.targetPct), now = rate === null ? null : rate * 100;
     const toGo = tgt !== null && now !== null ? tgt - now : null;
     const goal = toGo === null ? `목표 +${esc(data.targetPct)}%에서 ¾ 익절`
@@ -762,16 +765,22 @@
 
   // ---- 올해 해외주식 양도세 대략치 (잠금 해제 시): 올해 체결로 원화 손익을 선입선출로 계산, 기본공제 250만원, 22%
   //      + 보유 중인 달러 종목의 원화 실손익: 지금 평가액 × 지금 환율 − 매수일 환율로 산 원화 취득가 (환차손익 포함)
+  // 보유 종목 하나의 원화·달러 취득가 (산 날 환율). 올해 전에 산 물량이 있으면 모름 → null
+  function openCost(it) {
+    const o = secret.tax && (secret.tax.open || {})[it.symbol], q = num(it.qty);
+    if (!o || !(q > 0) || num(o.qty) + 1e-9 < q) return null;
+    const k = q / num(o.qty);  // 토스 보유 수량만큼만 (먼저 산 것부터 팔렸다고 보고 평균으로 나눔)
+    return { krw: num(o.costKrw) * k, usd: num(o.costUsd) * k };
+  }
   function holdKrw(t) {
-    const fx = num(secret.fx), open = t.open || {};
+    const fx = num(secret.fx);
     if (fx === null) return null;
     let cost = 0, value = 0, costUsd = 0, valueUsd = 0, names = [], skipped = [];
     for (const it of secret.account || []) {
       if ((it.currency || 'USD') !== 'USD' || !(num(it.qty) > 0)) continue;
-      const o = open[it.symbol], q = num(it.qty);
-      if (!o || num(o.qty) + 1e-9 < q) { skipped.push(it.symbol); continue; }  // 올해 전에 산 물량이 있어 원화 취득가를 모름
-      const k = q / num(o.qty);  // 토스 보유 수량만큼만 (먼저 산 것부터 팔렸다고 보고 평균으로 나눔)
-      cost += num(o.costKrw) * k; costUsd += num(o.costUsd) * k;
+      const c = openCost(it);
+      if (!c) { skipped.push(it.symbol); continue; }
+      cost += c.krw; costUsd += c.usd;
       valueUsd += num(it.value) || 0; names.push(it.symbol);
     }
     if (!names.length) return { skipped };
