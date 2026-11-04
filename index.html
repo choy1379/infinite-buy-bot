@@ -676,9 +676,11 @@
       const t = tot[it.currency || 'USD'] ||= { value: 0, purchase: 0, pl: 0 };
       t.value += num(it.value) || 0; t.purchase += num(it.purchase) || 0; t.pl += num(it.pl) || 0;
     }
+    // 달러 종목 원화 손익: 토스 '내 투자' 원화처럼 산 날 환율 원가 기준 (원가를 모르는 종목이 있으면 지금 환율 환산)
+    const hk = fx && secret.tax ? holdKrw(secret.tax) : null, kpl = hk && hk.names && !hk.skipped.length ? hk : null;
     const tots = Object.entries(tot).map(([cur, t]) => `<span>${cur === 'KRW' ? '원화' : '달러'} 합계 <span class="mono">${money(t.value, cur)}</span>
       <span class="mono ${sign(t.pl)}">${sgnMoney(t.pl, cur)} (${t.purchase ? pct(t.pl / t.purchase) : '–'})</span>${cur === 'USD' && fx
-        ? `<span class="sub mono" style="display:block">${money(t.value * fx, 'KRW')} (손익 <span class="${sign(t.pl)}">${sgnMoney(t.pl * fx, 'KRW')}</span>) · 환율 ${fx.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</span>` : ''}</span>`).join('');
+        ? `<span class="sub mono" style="display:block">${money(t.value * fx, 'KRW')} (손익 <span class="${sign(kpl ? kpl.pl : t.pl)}">${sgnMoney(kpl ? kpl.pl : t.pl * fx, 'KRW')}${kpl ? ` ${pct(kpl.rate)}` : ''}</span>) · 환율 ${fx.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원</span>` : ''}</span>`).join('');
     const hm = iso => kst(iso).split(' ')[1];
     const hms = iso => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
     const flash = acctFlash; acctFlash = false;  // 새 데이터가 막 왔을 때만 시간이 깜박임 (다른 이유로 다시 그릴 땐 가만히)
