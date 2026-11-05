@@ -11,6 +11,7 @@ import urllib.request
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .market import UA
 from .notify import Message
@@ -132,6 +133,36 @@ def message(day: str, a: dict, moves: dict[str, float], source: str) -> Message:
     return Message(f"📊 {day[5:].replace('-', '/')} SOXL {s['etf']:+.1f}% · TECL {t['etf']:+.1f}% 차이", lines)
 
 
+def record(day: str, a: dict, moves: dict[str, float], source: str) -> dict:
+    """대시보드 카드용 (공개 데이터: 시세·비중뿐, 계좌 정보 없음)."""
+    r2 = lambda v: round(v, 2)
+    out = {"date": day, "source": source,
+           "gap": [{"t": t, "name": _name(t), "m": r2(moves[t]), "c": r2(c)} for t, c in a["gap"]]}
+    for etf in ("SOXL", "TECL"):
+        v = a[etf]
+        out[etf] = {"etf": r2(v["etf"]), "index": r2(v["index"]), "rest": r2(v["rest"]),
+                    "rows": [{"t": t, "name": _name(t), "w": r2(w), "m": r2(m), "c": r2(c)}
+                             for t, w, m, c in sorted(v["rows"], key=lambda r: -r[1])]}
+    return out
+
+
+def save(path: Path, rec: dict, keep: int = 10) -> None:
+    """최근 keep 거래일만 날짜 내림차순으로 보관 (같은 날은 덮어씀)."""
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = []
+    rows = sorted([r for r in old if r.get("date") != rec["date"]] + [rec], key=lambda r: r["date"], reverse=True)[:keep]
+    path.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+
+
+def load(path: Path) -> list[dict]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
 class Attrib:
     def __init__(self, opener=None, timeout: float = 15.0):
         self.opener = opener or urllib.request.build_opener()
@@ -160,6 +191,9 @@ class Attrib:
         return out, " · ".join(notes)
 
     def build(self) -> Message:
+        return message(*self.fetch())
+
+    def fetch(self) -> tuple[str, dict, dict[str, float], str]:
         weights, source = self.weights()
         moves, day = {}, ""
         for tk in {"SOXL", "TECL"} | set(weights["SOXL"]) | set(weights["TECL"]):
@@ -171,4 +205,4 @@ class Attrib:
                 log.warning("%s 일봉 실패: %s", tk, e)
         if "SOXL" not in moves or "TECL" not in moves:
             raise ValueError("SOXL/TECL 일봉을 못 받았어요")
-        return message(day, analyze(weights, moves), moves, source)
+        return day, analyze(weights, moves), moves, source

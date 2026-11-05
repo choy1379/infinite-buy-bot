@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from . import __version__
+from .attrib import load as attrib_load
 from .realized import sync_view as realized_view
 from .tax import sync_view as tax_view
 
@@ -215,6 +216,7 @@ def build_payload(
 
     public = {
         "version": 1,
+        "attrib": attrib_load(cfg.run.state_dir / "attrib.json"),  # SOXL vs TECL 차이 (시세·비중만)
         "symbol": cfg.symbol,
         "updatedAt": now.isoformat(),
         "mode": bot.mode_label(),
