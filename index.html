@@ -187,7 +187,7 @@
   .gap h3 { font-size: 0.88rem; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
   .gap .why { display: grid; grid-template-columns: minmax(0, 1fr) 40% auto; align-items: center; gap: 4px 10px; font-size: 0.9rem; }
   .gap .why .n small { color: var(--muted); margin-left: 4px; white-space: nowrap; }
-  .gap td.name { white-space: nowrap; }
+  .gap td.name, .gap td.num b { white-space: nowrap; }
   .gap .why .v { text-align: right; min-width: 4.2em; }
   .gap .dv { position: relative; height: 8px; }
   .gap .dv::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line); }
@@ -1383,29 +1383,36 @@
     const a = list[gapDay], S = a.SOXL, T = a.TECL;
     const cOf = (side, t) => (side.rows.find(r => r.t === t) || {}).c || 0;
     const gmax = Math.max(...a.gap.map(g => Math.abs(g.c)), 0.01);
+    // 몫(%) = 그 종목 기여 ÷ 전체 움직임. 전체가 0 근처면 비율이 튀므로 ETF 기준 %p만 보여 줌
+    const share = (c, total) => Math.abs(total) < 0.1 ? null : c / total * 100;
+    const shareTxt = v => v === null ? '' : v >= 0 ? `${Math.round(v)}%` : `막음 ${Math.round(-v)}%`;
+    const gapTotal = T.index - S.index;   // 기초지수 기준 차이 (ETF 차이 ÷ 3)
     const why = a.gap.map(g => `<div class="n">${esc(g.name)}<small class="mono ${sign(g.m)}">${pc(g.m)}</small></div>
-      ${dvBar(g.c, gmax)}<div class="v mono">${pp(g.c)}%p</div>
-      <div class="muted mono" style="grid-column:1/-1;font-size:0.76rem;margin:-2px 0 4px">TECL ${pp(cOf(T, g.t))} · SOXL ${pp(cOf(S, g.t))}</div>`).join('');
+      ${dvBar(g.c, gmax)}<div class="v mono"><b>${share(g.c, gapTotal) === null ? `${pp(g.c * 3)}%p` : shareTxt(share(g.c, gapTotal))}</b></div>
+      <div class="muted mono" style="grid-column:1/-1;font-size:0.76rem;margin:-2px 0 4px">TECL ${pp(cOf(T, g.t) * 3)}%p · SOXL ${pp(cOf(S, g.t) * 3)}%p</div>`).join('');
     const side = gapEtf === 'SOXL' ? S : T;
     const rmax = Math.max(...side.rows.map(r => Math.abs(r.c)), Math.abs(side.rest), 0.01);
+    const useShare = Math.abs(side.index) >= 0.1;
+    const cell = (c, cls = '') => `<td class="num mono ${cls}">${useShare ? `<b>${shareTxt(share(c, side.index))}</b><br>` : ''}<small class="muted">${pp(c * 3)}%p</small></td>`;
     const rows = side.rows.map(r => `<tr><td class="name">${esc(r.name)}</td><td class="num mono">${r.w.toFixed(1)}%</td>
-      <td class="num mono ${sign(r.m)}">${pc(r.m)}</td><td class="bar-cell">${dvBar(r.c, rmax)}</td><td class="num mono">${pp(r.c)}</td></tr>`).join('');
+      <td class="num mono ${sign(r.m)}">${pc(r.m)}</td><td class="bar-cell">${dvBar(r.c, rmax)}</td>${cell(r.c)}</tr>`).join('');
+    const word = side.index < 0 ? '하락' : '상승';
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
         <div><span class="label">SOXL · 반도체</span><b class="mono ${sign(S.etf)}">${pc(S.etf)}</b><span class="sub mono">기초지수 ${pc(S.index, 2)}</span></div>
         <div><span class="label">TECL · 기술주</span><b class="mono ${sign(T.etf)}">${pc(T.etf)}</b><span class="sub mono">기초지수 ${pc(T.index, 2)}</span></div>
       </div>
-      <h3>차이 원인</h3>
+      <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
       <div class="why">${why}</div>
       <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>
-      <div class="qhead" style="margin-top:14px"><h3 style="margin:0">top10 기여</h3>
+      <div class="qhead" style="margin-top:14px"><h3 style="margin:0">${gapEtf} ${pc(side.etf)} 중 몫</h3>
         <div class="tabs mini" id="gap-tabs" role="tablist" aria-label="지수">${['SOXL', 'TECL'].map(e => `<button type="button" role="tab" data-gap="${e}" aria-selected="${e === gapEtf}">${e}</button>`).join('')}</div></div>
       <div class="table-wrap"><table aria-label="${gapEtf} 상위 10종목 기여">
-        <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">기여</th></tr></thead>
-        <tbody>${rows}<tr><td class="name muted">나머지 종목</td><td></td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td><td class="num mono muted">${pp(side.rest)}</td></tr></tbody></table></div>
+        <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">${useShare ? `${word} 중` : '영향'}</th></tr></thead>
+        <tbody>${rows}<tr><td class="name muted">나머지 종목</td><td></td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td>${cell(side.rest, 'muted')}</tr></tbody></table></div>
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
         <span class="mono">${md2(d.date)}</span><br><span class="mono ${sign(d.SOXL.etf)}">S ${pc(d.SOXL.etf)}</span> <span class="mono ${sign(d.TECL.etf)}">T ${pc(d.TECL.etf)}</span></button>`).join('')}</div>
-      <p class="src">기여 = 비중 × 등락 · 기초지수 = ETF ÷ 3 · 비중: ${esc(a.source || '')}</p>`;
+      <p class="src">몫 = 그 종목 때문에 움직인 양 ÷ 전체 · 막음 = 반대로 움직여 줄여 줌 · 작은 숫자는 ETF 기준 %p · 비중: ${esc(a.source || '')}</p>`;
   }
   el('gap').addEventListener('click', ev => {
     const t = ev.target.closest('button[data-gap]'), d = ev.target.closest('button[data-gapday]');
