@@ -18,8 +18,8 @@ from .notify import Message
 log = logging.getLogger(__name__)
 
 # SOXL = ICE 반도체 지수(SOXX와 같은 지수) 3배, TECL = Technology Select Sector 지수(XLK와 같은 지수) 3배
-SOXX_CSV = ("https://www.ishares.com/us/products/239705/ishares-phlx-semiconductor-etf/1467271812596.ajax"
-            "?fileType=csv&fileName=SOXX_holdings&dataType=fund&siteEntryPassthrough=true")  # passthrough: 투자자 유형 선택 HTML 건너뜀
+# iShares SOXX 파일은 봇에 HTML만 줘서 SOXL 운용사(Direxion) 보유 파일을 씀
+SOXL_CSV = "https://www.direxion.com/holdings/SOXL.csv"
 XLK_XLSX = "https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-xlk.xlsx"
 CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=1d"
 
@@ -38,21 +38,35 @@ def _name(t: str) -> str:
     return NAMES.get(t, t)
 
 
-def parse_soxx_csv(text: str, n: int = 10) -> dict[str, float]:
-    """iShares 보유종목 CSV: 앞쪽 설명 줄을 건너뛰고 'Ticker' 헤더부터 읽는다."""
+def parse_holdings_csv(text: str, n: int = 10) -> dict[str, float]:
+    """Direxion 보유 CSV: 'Ticker'와 비중(Percent/Weight) 열이 있는 헤더부터 읽는다.
+    스왑·현금은 빼고 주식만 합 100%로 다시 맞춘다 (3배 ETF는 주식+스왑으로 지수를 따라가서)."""
     lines = text.splitlines()
-    start = next((i for i, l in enumerate(lines) if l.lstrip('\ufeff"').startswith("Ticker")), None)
+    start = next((i for i, l in enumerate(lines) if "ticker" in l.lower()
+                  and ("percent" in l.lower() or "weight" in l.lower())), None)
     if start is None:
         raise ValueError(f"CSV가 아님 (Ticker 헤더 없음, 앞부분: {text[:60]!r})")
+    rows = list(csv.DictReader(lines[start:]))
+    cols = list(rows[0]) if rows else []
+    tc = next((c for c in cols if c.strip().lower() in ("stockticker", "ticker")), None)
+    wc = next((c for c in cols if "percent" in c.lower() or "weight" in c.lower()), None)
+    dc = next((c for c in cols if "description" in c.lower() or c.strip().lower() == "name"), None)
+    if not tc or not wc:
+        raise ValueError(f"열 이름이 다름: {cols}")
     out = {}
-    for row in csv.DictReader(lines[start:]):
-        t, w = (row.get("Ticker") or "").strip(), (row.get("Weight (%)") or "").replace(",", "")
-        if row.get("Asset Class", "Equity") == "Equity" and t and t != "-":
-            try:
-                out[t] = float(w)
-            except ValueError:
-                continue
-    return dict(sorted(out.items(), key=lambda kv: -kv[1])[:n])
+    for row in rows:
+        t = (row.get(tc) or "").strip().upper()
+        desc = (row.get(dc) or "").upper() if dc else ""
+        if not re.fullmatch(r"[A-Z][A-Z.]{0,5}", t) or any(k in desc for k in ("SWAP", "CASH", "TREASUR", "MONEY MARKET", "FUND")):
+            continue
+        try:
+            out[t] = out.get(t, 0) + float((row.get(wc) or "").replace(",", "").replace("%", ""))
+        except ValueError:
+            continue
+    total = sum(out.values())
+    if total <= 0:
+        raise ValueError("주식 종목 0개")
+    return dict(sorted(((t, w / total * 100) for t, w in out.items()), key=lambda kv: -kv[1])[:n])
 
 
 def _xlsx_rows(data: bytes) -> list[list[str]]:
@@ -144,7 +158,7 @@ class Attrib:
 
     def weights(self) -> tuple[dict[str, dict[str, float]], str]:
         """각 ETF 따로 받고, 실패한 쪽만 고정 비중으로 바꾼다."""
-        srcs = {"SOXL": ("iShares SOXX", lambda: parse_soxx_csv(self._get(SOXX_CSV).decode("utf-8-sig"))),
+        srcs = {"SOXL": ("Direxion SOXL", lambda: parse_holdings_csv(self._get(SOXL_CSV).decode("utf-8-sig"))),
                 "TECL": ("SSGA XLK", lambda: parse_xlk_xlsx(self._get(XLK_XLSX)))}
         out, notes = {}, []
         for etf, (label, fetch) in srcs.items():
