@@ -168,7 +168,9 @@ class BotFlowTest(unittest.TestCase):
         path.write_text(CONFIG.format(mode=mode, dry_run=str(dry_run).lower(), not_before=not_before), encoding="utf-8")
         cfg = load_config(path)
         state = State(cfg.run.state_dir / "state.json")
-        return Bot(cfg, self.broker, Notifier([self.capture]), state, clock=lambda: self.now[0], sleep=lambda s: None)
+        bot = Bot(cfg, self.broker, Notifier([self.capture]), state, clock=lambda: self.now[0], sleep=lambda s: None)
+        bot.attrib = None
+        return bot
 
     def at(self, y, m, d, hh, mm):
         self.now[0] = datetime(y, m, d, hh, mm, tzinfo=KST)
