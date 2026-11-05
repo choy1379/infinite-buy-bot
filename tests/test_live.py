@@ -115,7 +115,7 @@ class ServerTest(unittest.TestCase):
         status, headers, body = self.get("/")
         self.assertEqual(status, 200)
         self.assertIn("text/html", headers["Content-Type"])
-        self.assertIn(b"book-fold", body)
+        self.assertIn(b"id=\"gap\"", body)
 
     def test_orderbook_is_cached_for_many_viewers(self):
         results = []
