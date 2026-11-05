@@ -188,6 +188,7 @@
   .gap .sum { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-weight: 600; font-size: 0.92rem; line-height: 1.5; }
   .gap tr.total td { background: var(--soft); font-weight: 600; }
   .gap tr.total td:first-child { border-radius: 8px 0 0 8px; } .gap tr.total td:last-child { border-radius: 0 8px 8px 0; }
+  .gap .tug { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--soft); font-size: 0.85rem; }
   .gap h3 { font-size: 0.88rem; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
   .gap .why { display: grid; grid-template-columns: minmax(0, 1fr) 40% auto; align-items: center; gap: 4px 10px; font-size: 0.9rem; }
   .gap .why .n small { color: var(--muted); margin-left: 4px; white-space: nowrap; }
@@ -1415,7 +1416,11 @@
     const side = gapEtf === 'SOXL' ? S : T;
     const rmax = Math.max(...side.rows.map(r => Math.abs(r.c)), Math.abs(side.rest), 0.01);
     const useShare = Math.abs(side.index) >= 0.1;
-    const cell = (c, cls = '') => `<td class="num mono ${cls}">${useShare ? `<b>${shareTxt(share(c, side.index))}</b><br>` : ''}<small class="muted">${pp(c * 3)}%p</small></td>`;
+    // 보합인 날은 줄다리기: 올린 쪽·내린 쪽 합계 중 그 종목 몫
+    const parts10 = [...side.rows.map(r => r.c), side.rest];
+    const upSum = parts10.filter(c => c > 0).reduce((t, c) => t + c, 0), downSum = parts10.filter(c => c < 0).reduce((t, c) => t + c, 0);
+    const tug = c => c > 0 ? `올림 ${Math.round(c / upSum * 100)}%` : c < 0 ? `내림 ${Math.round(c / downSum * 100)}%` : '–';
+    const cell = (c, cls = '', total = false) => `<td class="num mono ${cls}">${total && !useShare ? '' : `<b class="${useShare ? '' : sign(c)}">${useShare ? shareTxt(share(c, side.index)) : tug(c)}</b><br>`}<small class="muted">${pp(c * 3)}%p</small></td>`;
     const rows = side.rows.map(r => `<tr><td class="name">${esc(r.name)}</td><td class="num mono">${r.w.toFixed(1)}%</td>
       <td class="num mono ${sign(r.m)}">${pc(r.m)}</td><td class="bar-cell">${dvBar(r.c, rmax)}</td>${cell(r.c)}</tr>`).join('');
     const word = side.index < 0 ? '하락' : '상승';
@@ -1428,11 +1433,12 @@
       <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
       <div class="why">${why}</div>
       <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>
-      <div class="qhead" style="margin-top:14px"><h3 style="margin:0">${gapEtf} ${pc(side.etf)} 중 몫</h3>
+      <div class="qhead" style="margin-top:14px"><h3 style="margin:0">${gapEtf} ${pc(side.etf)} ${useShare ? '중 몫' : '줄다리기'}</h3>
         <div class="tabs mini" id="gap-tabs" role="tablist" aria-label="지수">${['SOXL', 'TECL'].map(e => `<button type="button" role="tab" data-gap="${e}" aria-selected="${e === gapEtf}">${e}</button>`).join('')}</div></div>
+      ${useShare ? '' : `<p class="tug mono">올린 쪽 <b class="up">${pp(upSum * 3)}%p</b> vs 내린 쪽 <b class="down">${pp(downSum * 3)}%p</b></p>`}
       <div class="table-wrap"><table aria-label="${gapEtf} 상위 10종목 기여">
-        <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">${useShare ? `${word} 중` : '영향'}</th></tr></thead>
-        <tbody>${rows}<tr class="total"><td class="name">top10 합계</td><td class="num mono">${wSum.toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(cSum, Math.max(rmax, Math.abs(cSum)))}</td>${cell(cSum)}</tr>
+        <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">${useShare ? `${word} 중` : '줄다리기'}</th></tr></thead>
+        <tbody>${rows}<tr class="total"><td class="name">top10 합계</td><td class="num mono">${wSum.toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(cSum, Math.max(rmax, Math.abs(cSum)))}</td>${cell(cSum, '', true)}</tr>
         <tr><td class="name muted">나머지 종목</td><td class="num mono muted">${Math.max(0, 100 - wSum).toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td>${cell(side.rest, 'muted')}</tr></tbody></table></div>
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
         <span class="mono">${md2(d.date)}</span><br><span class="mono ${sign(d.SOXL.etf)}">S ${pc(d.SOXL.etf)}</span> <span class="mono ${sign(d.TECL.etf)}">T ${pc(d.TECL.etf)}</span></button>`).join('')}</div>
