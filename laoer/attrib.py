@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 # SOXL = ICE 반도체 지수(SOXX와 같은 지수) 3배, TECL = Technology Select Sector 지수(XLK와 같은 지수) 3배
 SOXX_CSV = ("https://www.ishares.com/us/products/239705/ishares-phlx-semiconductor-etf/1467271812596.ajax"
-            "?fileType=csv&fileName=SOXX_holdings&dataType=fund")
+            "?fileType=csv&fileName=SOXX_holdings&dataType=fund&siteEntryPassthrough=true")  # passthrough: 투자자 유형 선택 HTML 건너뜀
 XLK_XLSX = "https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-xlk.xlsx"
 CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=1d"
 
@@ -41,7 +41,9 @@ def _name(t: str) -> str:
 def parse_soxx_csv(text: str, n: int = 10) -> dict[str, float]:
     """iShares 보유종목 CSV: 앞쪽 설명 줄을 건너뛰고 'Ticker' 헤더부터 읽는다."""
     lines = text.splitlines()
-    start = next(i for i, l in enumerate(lines) if l.lstrip('﻿"').startswith("Ticker"))
+    start = next((i for i, l in enumerate(lines) if l.lstrip('\ufeff"').startswith("Ticker")), None)
+    if start is None:
+        raise ValueError(f"CSV가 아님 (Ticker 헤더 없음, 앞부분: {text[:60]!r})")
     out = {}
     for row in csv.DictReader(lines[start:]):
         t, w = (row.get("Ticker") or "").strip(), (row.get("Weight (%)") or "").replace(",", "")
@@ -141,12 +143,21 @@ class Attrib:
             return r.read()
 
     def weights(self) -> tuple[dict[str, dict[str, float]], str]:
-        try:
-            return {"SOXL": parse_soxx_csv(self._get(SOXX_CSV).decode("utf-8-sig")),
-                    "TECL": parse_xlk_xlsx(self._get(XLK_XLSX))}, "iShares SOXX · SSGA XLK 당일 파일"
-        except Exception as e:  # 발행사 파일 형식/접속이 바뀌어도 알림은 보낸다
-            log.warning("보유종목 비중 받기 실패, 고정 비중 사용: %s", e)
-            return FALLBACK, "고정 추정값 (발행사 파일 받기 실패)"
+        """각 ETF 따로 받고, 실패한 쪽만 고정 비중으로 바꾼다."""
+        srcs = {"SOXL": ("iShares SOXX", lambda: parse_soxx_csv(self._get(SOXX_CSV).decode("utf-8-sig"))),
+                "TECL": ("SSGA XLK", lambda: parse_xlk_xlsx(self._get(XLK_XLSX)))}
+        out, notes = {}, []
+        for etf, (label, fetch) in srcs.items():
+            try:
+                out[etf] = fetch()
+                if not out[etf]:
+                    raise ValueError("종목 0개")
+                notes.append(f"{label} 당일 파일")
+            except Exception as e:  # 발행사 파일 형식/접속이 바뀌어도 알림은 보낸다
+                log.warning("%s 비중 받기 실패, 고정 비중 사용: %s", label, e)
+                out[etf] = FALLBACK[etf]
+                notes.append(f"{etf} 고정 추정값({label} 받기 실패)")
+        return out, " · ".join(notes)
 
     def build(self) -> Message:
         weights, source = self.weights()
