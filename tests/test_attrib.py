@@ -79,3 +79,20 @@ class AttribTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SaveTest(unittest.TestCase):
+    def test_keeps_latest_days_and_overwrites_same_day(self):
+        import tempfile
+        from pathlib import Path
+        from laoer.attrib import load, record, save
+        w = {"SOXL": {"MU": 8}, "TECL": {"AAPL": 13}}
+        moves = {"SOXL": -5.0, "TECL": 0.0, "MU": -7.0, "AAPL": 5.0}
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "attrib.json"
+            for day in ("2026-11-03", "2026-11-04", "2026-11-04", "2026-11-05"):
+                save(p, record(day, analyze(w, moves), moves, "x"), keep=2)
+            rows = load(p)
+        self.assertEqual([r["date"] for r in rows], ["2026-11-05", "2026-11-04"])
+        self.assertEqual(rows[0]["gap"][0], {"t": "AAPL", "name": "애플", "m": 5.0, "c": 0.65})
+        self.assertEqual(rows[0]["SOXL"]["rows"][0]["c"], -0.56)

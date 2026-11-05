@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal
 
 from .config import Config
-from .attrib import Attrib
+from .attrib import Attrib, message as attrib_message, record as attrib_record, save as attrib_save
 from .notify import Message, Notifier
 from .state import State
 from .strategy import LEG_LABELS, PHASE_LABELS, Plan, build_plan, t_value
@@ -606,7 +606,10 @@ class Bot:
         if not self.attrib:
             return
         try:
-            self.notifier.send(self.attrib.build())
+            day, a, moves, source = self.attrib.fetch()
+            attrib_save(self.cfg.run.state_dir / "attrib.json", attrib_record(day, a, moves, source))
+            self.notifier.send(attrib_message(day, a, moves, source))
+            self._publish("attrib")
         except Exception as e:  # 부가 알림이라 실패해도 봇은 계속
             log.warning("SOXL/TECL 차이 알림 실패: %s", e)
 
