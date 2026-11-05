@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("notify", help="설정된 알림 채널로 문구를 그대로 보냄 (예: 승인 필요)")
     p.add_argument("text", nargs="+", help="보낼 문구 (첫 줄이 제목, 여러 단어는 따옴표로 묶기)")
     p.add_argument("--level", choices=["info", "success", "warn", "error"], default="info")
-    p = sub.add_parser("attrib", help="어제 SOXL vs TECL 차이 원인(상위 10종목 기여도)을 보여줌")
+    p = sub.add_parser("attrib", help="어제 SOXL vs TECL 차이 원인(상위 10종목 기여도)을 보여주고 대시보드용으로 저장")
     p.add_argument("--notify", action="store_true", help="알림으로도 보냄")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
@@ -247,8 +247,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if notifier.channels else 1
 
     if args.cmd == "attrib":
-        from .attrib import Attrib
-        msg = Attrib().build()
+        from .attrib import Attrib, message, record, save
+        day, a, moves, source = Attrib().fetch()
+        save(cfg.run.state_dir / "attrib.json", record(day, a, moves, source))  # 대시보드 카드용 (다음 갱신 때 올라감)
+        msg = message(day, a, moves, source)
         print(msg.text())
         if args.notify:
             build_notifier(cfg).send(msg)
