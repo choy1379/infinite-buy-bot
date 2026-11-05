@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal
 
 from .config import Config
+from .attrib import Attrib
 from .notify import Message, Notifier
 from .state import State
 from .strategy import LEG_LABELS, PHASE_LABELS, Plan, build_plan, t_value
@@ -101,6 +102,7 @@ class Bot:
         self.live_url = None  # 외부 접속 주소 (Cloudflare 터널). 비밀번호 칸으로만 공개
         self.fx_rate = None  # () -> 원/달러 (선택). 일간 손익을 원화로도 보여주는 용도, 못 받아도 무방
         self.last_error: str | None = None
+        self.attrib: Attrib | None = Attrib()  # 테스트는 None (네트워크 안 씀)
         self.last_error_at: str | None = None
 
     @property
@@ -599,6 +601,15 @@ class Bot:
             return "알림 전용(주문 안 함)"
         return "모의(DRY-RUN)" if self.cfg.run.dry_run else "실거래(LIVE)"
 
+    def send_attrib(self) -> None:
+        """마감 리포트 뒤 SOXL vs TECL 차이 원인(상위 10종목 기여도)을 알림."""
+        if not self.attrib:
+            return
+        try:
+            self.notifier.send(self.attrib.build())
+        except Exception as e:  # 부가 알림이라 실패해도 봇은 계속
+            log.warning("SOXL/TECL 차이 알림 실패: %s", e)
+
     # -------------------------------------------------------------- scheduler
     def tick(self) -> float:
         """할 일을 하고, 다음에 깨어날 때까지의 초를 돌려준다."""
@@ -622,6 +633,7 @@ class Bot:
                 if now >= self.report_due(_dt(day["session_end"])):
                     if self.report(date) == "pending":
                         return 300
+                    self.send_attrib()
 
         s = self.next_session()
         if s is None:
