@@ -4,15 +4,17 @@ import io
 import unittest
 import zipfile
 
-from laoer.attrib import FALLBACK, Attrib, analyze, day_change, message, parse_soxx_csv, parse_xlk_xlsx
+from laoer.attrib import FALLBACK, Attrib, analyze, day_change, message, parse_holdings_csv, parse_xlk_xlsx
 
-CSV = '''﻿iShares PHLX Semiconductor ETF
-Fund Holdings as of,"Nov 04, 2026"
- 
-Ticker,Name,Sector,Asset Class,Market Value,Weight (%),Notional Value
-"NVDA","NVIDIA","Information Technology","Equity","1,000","8.50","1,000"
-"MU","MICRON","Information Technology","Equity","900","7.10","900"
-"USD","USD CASH","Cash and/or Derivatives","Cash","10","0.10","10"
+CSV = '''Direxion Shares ETF Trust
+Direxion Daily Semiconductor Bull 3X Shares
+Holdings Data as of: 11/04/2026
+
+TradeDate,AccountTicker,StockTicker,SecurityDescription,Shares,Price,MarketValue,Money,HoldingsPercent
+11/04/2026,SOXL,NVDA,NVIDIA CORP,100,1,600,0,6.00
+11/04/2026,SOXL,MU,MICRON TECHNOLOGY,100,1,400,0,4.00
+11/04/2026,SOXL,,ICE SEMICONDUCTOR INDEX SWAP,0,0,9000,0,90.00
+11/04/2026,SOXL,DGCXX,DREYFUS GOVT CASH MGMT FUND,1,1,10,0,0.10
 '''
 
 
@@ -37,8 +39,8 @@ def xlsx(rows):
 
 
 class AttribTest(unittest.TestCase):
-    def test_soxx_csv(self):
-        self.assertEqual(parse_soxx_csv(CSV), {"NVDA": 8.5, "MU": 7.1})
+    def test_direxion_csv_keeps_stocks_only(self):
+        self.assertEqual(parse_holdings_csv(CSV), {"NVDA": 60.0, "MU": 40.0})
 
     def test_xlk_xlsx(self):
         data = xlsx([["Fund Name:", "XLK"], ["Name", "Ticker", "Identifier", "Weight"],
@@ -68,11 +70,11 @@ class AttribTest(unittest.TestCase):
             def __exit__(self, *a): pass
         class Opener:
             def open(self, req, timeout):
-                return R(b"<html>not csv</html>" if "ishares" in req.full_url else data)
+                return R(b"<html>not csv</html>" if "direxion" in req.full_url else data)
         data = xlsx([["Name", "Ticker", "Weight"], ["APPLE", "AAPL", 13.2]])
         w, src = Attrib(opener=Opener()).weights()
         self.assertEqual(w, {"SOXL": FALLBACK["SOXL"], "TECL": {"AAPL": 13.2}})
-        self.assertEqual(src, "SOXL 고정 추정값(iShares SOXX 받기 실패) · SSGA XLK 당일 파일")
+        self.assertEqual(src, "SOXL 고정 추정값(Direxion SOXL 받기 실패) · SSGA XLK 당일 파일")
 
 
 if __name__ == "__main__":
