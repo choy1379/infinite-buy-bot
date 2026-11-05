@@ -180,7 +180,8 @@
   /* SOXL vs TECL 차이 카드 */
   .gap .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .gap .big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 14px; }
-  .gap .big > div { background: var(--soft); border-radius: 10px; padding: 10px 12px; }
+  .gap .big > button { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--soft); border: 2px solid transparent; border-radius: 10px; padding: 8px 10px; }
+  .gap .big > button[aria-pressed="true"] { border-color: var(--ink); }
   .gap .big .label { color: var(--muted); font-size: 0.82rem; }
   .gap .big b { display: block; font-size: 1.5rem; line-height: 1.3; }
   .gap .big .sub { color: var(--muted); font-size: 0.78rem; }
@@ -1397,10 +1398,10 @@
     const rows = side.rows.map(r => `<tr><td class="name">${esc(r.name)}</td><td class="num mono">${r.w.toFixed(1)}%</td>
       <td class="num mono ${sign(r.m)}">${pc(r.m)}</td><td class="bar-cell">${dvBar(r.c, rmax)}</td>${cell(r.c)}</tr>`).join('');
     const word = side.index < 0 ? '하락' : '상승';
+    const wSum = side.rows.reduce((t, r) => t + r.w, 0), cSum = side.rows.reduce((t, r) => t + r.c, 0);
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
-        <div><span class="label">SOXL · 반도체</span><b class="mono ${sign(S.etf)}">${pc(S.etf)}</b><span class="sub mono">기초지수 ${pc(S.index, 2)}</span></div>
-        <div><span class="label">TECL · 기술주</span><b class="mono ${sign(T.etf)}">${pc(T.etf)}</b><span class="sub mono">기초지수 ${pc(T.index, 2)}</span></div>
+        ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<button type="button" data-gap="${e}" aria-pressed="${e === gapEtf}"><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></button>`).join('')}
       </div>
       <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
       <div class="why">${why}</div>
@@ -1409,7 +1410,8 @@
         <div class="tabs mini" id="gap-tabs" role="tablist" aria-label="지수">${['SOXL', 'TECL'].map(e => `<button type="button" role="tab" data-gap="${e}" aria-selected="${e === gapEtf}">${e}</button>`).join('')}</div></div>
       <div class="table-wrap"><table aria-label="${gapEtf} 상위 10종목 기여">
         <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">${useShare ? `${word} 중` : '영향'}</th></tr></thead>
-        <tbody>${rows}<tr><td class="name muted">나머지 종목</td><td></td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td>${cell(side.rest, 'muted')}</tr></tbody></table></div>
+        <tbody>${rows}<tr style="font-weight:600"><td class="name">top10 합계</td><td class="num mono">${wSum.toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(cSum, Math.max(rmax, Math.abs(cSum)))}</td>${cell(cSum)}</tr>
+        <tr><td class="name muted">나머지 종목</td><td class="num mono muted">${Math.max(0, 100 - wSum).toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td>${cell(side.rest, 'muted')}</tr></tbody></table></div>
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
         <span class="mono">${md2(d.date)}</span><br><span class="mono ${sign(d.SOXL.etf)}">S ${pc(d.SOXL.etf)}</span> <span class="mono ${sign(d.TECL.etf)}">T ${pc(d.TECL.etf)}</span></button>`).join('')}</div>
       <p class="src">몫 = 그 종목 때문에 움직인 양 ÷ 전체 · 막음 = 반대로 움직여 줄여 줌 · 작은 숫자는 ETF 기준 %p · 비중: ${esc(a.source || '')}</p>`;
