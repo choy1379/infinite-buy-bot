@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
 <title>TECL 무한매수</title>
 <script>try { const t = localStorage.getItem('ibb-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +22,7 @@
     --buy: #e42939; --sell: #2272eb;   /* 한국식: 매수 빨강, 매도 파랑 */
     --font-body: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     --font-mono: var(--font-body);
-    color-scheme: light;
+    color-scheme: only light;   /* only: 폰 브라우저의 강제 어둡게(자동 다크)를 막음 */
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
