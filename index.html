@@ -185,6 +185,7 @@
   .gap .big .label { color: var(--muted); font-size: 0.82rem; }
   .gap .big b { display: block; font-size: 1.5rem; line-height: 1.3; }
   .gap .big .sub { color: var(--muted); font-size: 0.78rem; }
+  .gap .sum { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-weight: 600; font-size: 0.92rem; line-height: 1.5; }
   .gap h3 { font-size: 0.88rem; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
   .gap .why { display: grid; grid-template-columns: minmax(0, 1fr) 40% auto; align-items: center; gap: 4px 10px; font-size: 0.9rem; }
   .gap .why .n small { color: var(--muted); margin-left: 4px; white-space: nowrap; }
@@ -1391,6 +1392,24 @@
     const why = a.gap.map(g => `<div class="n">${esc(g.name)}<small class="mono ${sign(g.m)}">${pc(g.m)}</small></div>
       ${dvBar(g.c, gmax)}<div class="v mono"><b>${share(g.c, gapTotal) === null ? `${pp(g.c * 3)}%p` : shareTxt(share(g.c, gapTotal))}</b></div>
       <div class="muted mono" style="grid-column:1/-1;font-size:0.76rem;margin:-2px 0 4px">TECL ${pp(cOf(T, g.t) * 3)}%p · SOXL ${pp(cOf(S, g.t) * 3)}%p</div>`).join('');
+    // 한 줄 정리: 가장 큰 묶음(어디에만/어디에 더 많이 있는 + 오름/내림)을 문장으로, 나머지는 몫만
+    const groups = [];
+    for (const g of a.gap) {
+      const cs = cOf(S, g.t), ct = cOf(T, g.t);
+      const where = !cs ? 'TECL에만 있는' : !ct ? 'SOXL에만 있는' : Math.abs(cs) > Math.abs(ct) ? 'SOXL 비중이 더 큰' : 'TECL 비중이 더 큰';
+      const verb = g.m >= 0 ? '올라서' : '빠져서';
+      const x = groups.find(x => x.where === where && x.verb === verb);
+      if (x) { x.names.push(g.name); x.c += g.c; } else groups.push({ where, verb, names: [g.name], c: g.c });
+    }
+    groups.sort((p, q) => Math.abs(q.c) - Math.abs(p.c));
+    const ga = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c < 11172 && c % 28 ? '이' : '가'; };
+    const main = groups[0], mainShare = share(main.c, gapTotal), names = main.names.join('·');
+    const rest = groups.slice(1).map(x => `${x.names.join('·')} ${Math.round(share(x.c, gapTotal) || 0)}%`);
+    const others = share(gapTotal - a.gap.reduce((t, g) => t + g.c, 0), gapTotal);
+    const summary = mainShare === null ? `${main.where} ${names}${ga(names)} ${main.verb} 차이가 났어요.`
+      : `${main.where} ${names}${ga(names)} ${main.verb} 차이의 ${Math.round(mainShare)}%${mainShare >= 50 ? '(절반 이상)' : ''}가 생겼어요.`
+        + (rest.length ? ` ${rest.join(', ')} 몫이고,` : '')
+        + (others >= 0 ? ` 나머지 ${Math.round(others)}%는 다른 종목 몫이에요.` : ` 다른 종목이 반대로 움직여 ${Math.round(-others)}% 줄여 줬어요.`);
     const side = gapEtf === 'SOXL' ? S : T;
     const rmax = Math.max(...side.rows.map(r => Math.abs(r.c)), Math.abs(side.rest), 0.01);
     const useShare = Math.abs(side.index) >= 0.1;
@@ -1403,6 +1422,7 @@
       <div class="big">
         ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<button type="button" data-gap="${e}" aria-pressed="${e === gapEtf}"><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></button>`).join('')}
       </div>
+      <p class="sum">${esc(summary)}</p>
       <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
       <div class="why">${why}</div>
       <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>
