@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from laoer.attrib import analyze, day_change, message, parse_soxx_csv, parse_xlk_xlsx
+from laoer.attrib import FALLBACK, Attrib, analyze, day_change, message, parse_soxx_csv, parse_xlk_xlsx
 
 CSV = '''﻿iShares PHLX Semiconductor ETF
 Fund Holdings as of,"Nov 04, 2026"
@@ -61,6 +61,18 @@ class AttribTest(unittest.TestCase):
         text = message("2026-11-04", a, moves, "test").text()
         self.assertIn("11/04 SOXL -5.0% · TECL +0.0%", text)
         self.assertIn("애플 +5.0%", text)
+
+    def test_only_failed_side_falls_back(self):
+        class R(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+        class Opener:
+            def open(self, req, timeout):
+                return R(b"<html>not csv</html>" if "ishares" in req.full_url else data)
+        data = xlsx([["Name", "Ticker", "Weight"], ["APPLE", "AAPL", 13.2]])
+        w, src = Attrib(opener=Opener()).weights()
+        self.assertEqual(w, {"SOXL": FALLBACK["SOXL"], "TECL": {"AAPL": 13.2}})
+        self.assertEqual(src, "SOXL 고정 추정값(iShares SOXX 받기 실패) · SSGA XLK 당일 파일")
 
 
 if __name__ == "__main__":
