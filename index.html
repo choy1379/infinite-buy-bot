@@ -1245,7 +1245,7 @@
         lv = lv || livePx.SOXL;
         const px = alt && alt.closes && alt.closes.SOXL;
         const now = lv ? num(lv.price) : px ? px[Object.keys(px).sort().pop()] : null, r = dayRate('SOXL', lv);
-        el('perp').innerHTML = now ? `<small>SOXL ${lv ? '실시간' : '종가'}</small><br><b>${fmt(now)}</b> ${dropLv(r) ? dropBadge(r) : `<span class="${sign(r)}">${pct(r)}</span>`}` : '';
+        el('perp').innerHTML = now ? `<small title="계좌 카드의 '오늘'은 토스 기준(애프터장 마감가 대비)이라 다를 수 있음">SOXL ${lv ? '실시간' : '종가'} · 정규장 종가 대비</small><br><b>${fmt(now)}</b> ${dropLv(r) ? dropBadge(r) : `<span class="${sign(r)}">${pct(r)}</span>`}` : '';
       } else {
         const r = DEMO ? { lastPrice: 98.4, priceChange: -2.1, priceChangePercent: -2.09 }
           : await (await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=SOXLUSDT', { cache: 'no-store' })).json();
