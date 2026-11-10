@@ -210,12 +210,15 @@
   .gap .lg i { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
   .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; color: var(--muted); font-size: 0.76rem; }
   .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.1rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
-  .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.8fr) 1fr 1fr; gap: 2px 12px; align-items: center; font-size: 0.88rem; }
-  .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; text-align: center; padding-bottom: 4px; }
-  .gap .cmp .hd:first-child { text-align: left; }
+  .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.8fr); gap: 0 12px; align-items: center; font-size: 0.88rem; }
+  .gap .cmp > div { padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; padding-top: 0; }
   .gap .cmp .n small { display: block; font-size: 0.76rem; }
-  .gap .cmp .cv { text-align: center; font-size: 0.76rem; margin: 3px 0 6px; white-space: nowrap; }
-  .gap .cmp .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); margin: 4px 0; }
+  .gap .cmp .pair { display: grid; grid-template-columns: 2.6em minmax(0, 1fr) 3.4em; gap: 3px 6px; align-items: center; font-size: 0.76rem; }
+  .gap .cmp .pair .k { color: var(--muted); }
+  .gap .cmp .pair .v { text-align: right; font-weight: 600; }
+  .gap .cmp .pair .dv { height: 10px; }
+  .gap .cmp .tot { font-weight: 600; }
   .gap .more { display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 8px; cursor: pointer; }
   .gap .days { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
   .gap .days button { flex: none; border: 0; background: var(--soft); color: var(--ink); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 0.78rem; line-height: 1.35; text-align: left; cursor: pointer; }
@@ -1453,14 +1456,16 @@
     const sumOf = side => ({ c: side.rows.reduce((t, r) => t + r.c, 0), w: side.rows.reduce((t, r) => t + r.w, 0) });
     const sSum = sumOf(S), tSum = sumOf(T);
     const cmax = Math.max(both[0]?.k || 0, Math.abs(S.rest), Math.abs(T.rest), 0.01);
-    const cbar = (r, max = cmax) => r ? `<div>${dvBar(r.c, max)}<div class="cv mono"><b class="${sign(r.c)}">${pp(r.c * 3)}</b>${r.w !== undefined ? ` <span class="muted">${r.w.toFixed(1)}%</span>` : ''}</div></div>` : '<div class="cv muted">없음</div>';
+    // 한 종목에 SOXL·TECL 막대 두 줄, 같은 축이라 길이로 바로 비교
+    const line = (k, r, max) => r ? `<span class="k">${k}</span><span title="${r.w !== undefined ? `비중 ${r.w.toFixed(1)}%` : ''}">${dvBar(r.c, max)}</span><span class="v mono ${sign(r.c)}">${pp(r.c * 3)}</span>`
+      : `<span class="k">${k}</span><span class="muted">없음</span><span class="v muted">–</span>`;
+    const pair = (s, u, max = cmax) => `<div class="pair">${line('SOXL', s, max)}${line('TECL', u, max)}</div>`;
     const SHOW = 10, shown = gapAll ? both : both.slice(0, SHOW);
     const tmax = Math.max(Math.abs(sSum.c), Math.abs(tSum.c), cmax);
-    const cmp = `<div class="cmp"><div class="hd">종목 · 등락</div><div class="hd">SOXL <span class="mono ${sign(S.etf)}">${pc(S.etf)}</span></div><div class="hd">TECL <span class="mono ${sign(T.etf)}">${pc(T.etf)}</span></div>
-      ${shown.map(r => `<div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${cbar(r.s)}${cbar(r.u)}`).join('')}
-      <div class="sep"></div>
-      <div class="n"><b>80% 합계</b><small class="muted">${S.rows.length}·${T.rows.length}종목</small></div>${cbar(sSum, tmax)}${cbar(tSum, tmax)}
-      <div class="n muted">나머지 종목</div>${cbar({ c: S.rest }, tmax)}${cbar({ c: T.rest }, tmax)}</div>
+    const cmp = `<div class="cmp"><div class="hd">종목 · 등락</div><div class="hd">기여 %p (ETF 기준)</div>
+      ${shown.map(r => `<div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${pair(r.s, r.u)}`).join('')}
+      <div class="n tot">80% 합계<small class="muted">${S.rows.length}·${T.rows.length}종목</small></div>${pair(sSum, tSum, tmax)}
+      <div class="n muted">나머지 종목</div>${pair({ c: S.rest }, { c: T.rest }, tmax)}</div>
       ${both.length > SHOW ? `<button type="button" class="more" data-gapall>${gapAll ? '접기' : `전체 ${both.length}종목`}</button>` : ''}`;
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
