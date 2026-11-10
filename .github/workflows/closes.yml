@@ -21,12 +21,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: market-data 브랜치 가져오기 (없으면 새로)
+      - name: closes 브랜치 가져오기 (없으면 새로)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git clone -q --depth 1 -b market-data "$url" data || (mkdir data && git -C data init -q -b market-data && git -C data remote add origin "$url")
+          git clone -q --depth 1 -b closes "$url" data || (mkdir data && git -C data init -q -b closes && git -C data remote add origin "$url")
       - name: 새 날짜 종가 붙이기
         run: python -m laoer.closes data
       - name: 커밋
@@ -35,4 +35,4 @@ jobs:
           git add -A
           git diff --cached --quiet && exit 0
           git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "closes $(date -u +%F)"
-          git push -q origin market-data
+          git push -q origin closes

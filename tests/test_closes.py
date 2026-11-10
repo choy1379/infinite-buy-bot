@@ -14,10 +14,10 @@ class CloseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             folder, after_close = Path(d), datetime(2026, 11, 9, 17, 0, tzinfo=NY)
             seen = []
-            fetcher = lambda s, rng: (seen.append(rng), DATA)[1]
+            fetcher = lambda s, query: (seen.append(query.split("=")[0]), DATA)[1]
             self.assertEqual(closes.update(folder, "TECL", after_close, fetcher), 3)
             self.assertEqual(closes.update(folder, "TECL", after_close, fetcher), 0)
-            self.assertEqual(seen, ["max", "1mo"])
+            self.assertEqual(seen, ["period1", "range"])
             self.assertEqual((folder / "TECL.csv").read_text().splitlines(),
                              ["date,close", "2026-11-05,150.0", "2026-11-06,152.5", "2026-11-09,155.0"])
 

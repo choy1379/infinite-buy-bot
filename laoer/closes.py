@@ -1,4 +1,4 @@
-"""매일 종가 저장 (GitHub Actions 가 장 마감 뒤 실행, market-data 브랜치에 커밋).
+"""매일 종가 저장 (GitHub Actions 가 장 마감 뒤 실행, closes 브랜치에 커밋).
 
 폴더 안 종목별 csv(date,close)에 새 날짜 종가만 이어 붙인다. 파일이 없으면 상장 이후 전체를 받는다.
 야후 종가는 분할 반영, 배당 미반영. 봇은 이 파일을 쓰지 않는다. 사용법: python -m laoer.closes 폴더
@@ -30,7 +30,8 @@ def new_rows(closes: dict[str, float], after: str | None, now: datetime) -> list
 def update(folder: Path, symbol: str, now: datetime, fetcher=fetch) -> int:
     path = folder / f"{symbol}.csv"
     after = last_date(path)
-    rows = new_rows(fetcher(symbol, rng="1mo" if after else "max"), after, now)
+    # range=max 는 야후가 월봉으로 바꿔 줘서 전체 기간은 period1/period2 로 받는다
+    rows = new_rows(fetcher(symbol, query="range=1mo" if after else f"period1=0&period2={int(now.timestamp())}"), after, now)
     if rows:
         with path.open("a", encoding="utf-8", newline="\n") as f:
             f.write(("" if after else "date,close\n") + "\n".join(rows) + "\n")
