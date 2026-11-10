@@ -181,27 +181,27 @@
   /* SOXL vs TECL 차이 카드 */
   .gap .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .gap .big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 14px; }
-  .gap .big > button { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--soft); border: 2px solid transparent; border-radius: 10px; padding: 8px 10px; }
-  .gap .big > button[aria-pressed="true"] { border-color: var(--ink); }
+  .gap .big > div { background: var(--soft); border-radius: 10px; padding: 8px 10px; }
   .gap .big .label { color: var(--muted); font-size: 0.82rem; }
   .gap .big b { display: block; font-size: 1.5rem; line-height: 1.3; }
   .gap .big .sub { color: var(--muted); font-size: 0.78rem; }
   .gap .sum { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-weight: 600; font-size: 0.92rem; line-height: 1.5; }
-  .gap tr.total td { background: var(--soft); font-weight: 600; }
-  .gap tr.total td:first-child { border-radius: 8px 0 0 8px; } .gap tr.total td:last-child { border-radius: 0 8px 8px 0; }
-  .gap .tug { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--soft); font-size: 0.85rem; }
   .gap h3 { font-size: 0.88rem; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
   .gap .why { display: grid; grid-template-columns: minmax(0, 1fr) 40% auto; align-items: center; gap: 4px 10px; font-size: 0.9rem; }
   .gap .why .n small { color: var(--muted); margin-left: 4px; white-space: nowrap; }
-  .gap td.name, .gap td.num b { white-space: nowrap; }
   .gap .why .v { text-align: right; min-width: 4.2em; }
   .gap .dv { position: relative; height: 8px; }
   .gap .dv::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line); }
   .gap .dv span { position: absolute; top: 0; height: 100%; border-radius: 4px; }
   .gap .dv span.up { background: var(--buy); } .gap .dv span.down { background: var(--sell); }
   .gap .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
-  .gap table { width: 100%; font-size: 0.88rem; }
-  .gap td.bar-cell { width: 28%; }
+  .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.8fr) 1fr 1fr; gap: 2px 12px; align-items: center; font-size: 0.88rem; }
+  .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; text-align: center; padding-bottom: 4px; }
+  .gap .cmp .hd:first-child { text-align: left; }
+  .gap .cmp .n small { display: block; font-size: 0.76rem; }
+  .gap .cmp .cv { text-align: center; font-size: 0.76rem; margin: 3px 0 6px; white-space: nowrap; }
+  .gap .cmp .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); margin: 4px 0; }
+  .gap .more { display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 8px; cursor: pointer; }
   .gap .days { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
   .gap .days button { flex: none; border: 0; background: var(--soft); color: var(--ink); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 0.78rem; line-height: 1.35; text-align: left; cursor: pointer; }
   .gap .days button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
@@ -1371,8 +1371,8 @@
     return { closes };
   }
 
-  // ---- SOXL vs TECL 차이: 각 기초지수 top10의 비중 × 등락 = 기여(%p). 봇이 장 마감 뒤 attrib 로 저장
-  let gapDay = 0, gapEtf = 'SOXL';
+  // ---- SOXL vs TECL 차이: 각 기초지수 비중 누적 80%까지 종목의 비중 × 등락 = 기여(%p). 봇이 장 마감 뒤 attrib 로 저장
+  let gapDay = 0, gapAll = false;
   const pp = v => `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
   const pc = (v, d = 1) => `${v > 0 ? '+' : ''}${v.toFixed(d)}%`;
   const md2 = d => d.slice(5).replace('-', '/');
@@ -1414,40 +1414,42 @@
       : `${main.where} ${names}${ga(names)} ${main.verb} 차이의 ${Math.round(mainShare)}%${mainShare >= 50 ? '(절반 이상)' : ''}가 생겼어요.`
         + (rest.length ? ` ${rest.join(', ')} 몫이고,` : '')
         + (others >= 0 ? ` 나머지 ${Math.round(others)}%는 다른 종목 몫이에요.` : ` 다른 종목이 반대로 움직여 ${Math.round(-others)}% 줄여 줬어요.`);
-    const side = gapEtf === 'SOXL' ? S : T;
-    const rmax = Math.max(...side.rows.map(r => Math.abs(r.c)), Math.abs(side.rest), 0.01);
-    const useShare = Math.abs(side.index) >= 0.1;
-    // 보합인 날은 줄다리기: 올린 쪽·내린 쪽 합계 중 그 종목 몫
-    const parts10 = [...side.rows.map(r => r.c), side.rest];
-    const upSum = parts10.filter(c => c > 0).reduce((t, c) => t + c, 0), downSum = parts10.filter(c => c < 0).reduce((t, c) => t + c, 0);
-    const tug = c => c > 0 ? `올림 ${Math.round(c / upSum * 100)}%` : c < 0 ? `내림 ${Math.round(c / downSum * 100)}%` : '–';
-    const cell = (c, cls = '', total = false) => `<td class="num mono ${cls}">${total && !useShare ? '' : `<b class="${useShare ? '' : sign(c)}">${useShare ? shareTxt(share(c, side.index)) : tug(c)}</b><br>`}<small class="muted">${pp(c * 3)}%p</small></td>`;
-    const rows = side.rows.map(r => `<tr><td class="name">${esc(r.name)}</td><td class="num mono">${r.w.toFixed(1)}%</td>
-      <td class="num mono ${sign(r.m)}">${pc(r.m)}</td><td class="bar-cell">${dvBar(r.c, rmax)}</td>${cell(r.c)}</tr>`).join('');
-    const word = side.index < 0 ? '하락' : '상승';
-    const wSum = side.rows.reduce((t, r) => t + r.w, 0), cSum = side.rows.reduce((t, r) => t + r.c, 0);
+    // 종목별 나란히: 두 ETF 80% 종목을 합쳐 기여가 큰(많이 오르거나 빠진) 순
+    const bySide = side => Object.fromEntries(side.rows.map(r => [r.t, r]));
+    const sm = bySide(S), tm = bySide(T);
+    const both = [...new Set([...S.rows, ...T.rows].map(r => r.t))].map(t => {
+      const r = sm[t] || tm[t];
+      return { name: r.name, m: r.m, s: sm[t], u: tm[t], k: Math.max(Math.abs(sm[t]?.c || 0), Math.abs(tm[t]?.c || 0)) };
+    }).sort((p, q) => q.k - p.k);
+    const sumOf = side => ({ c: side.rows.reduce((t, r) => t + r.c, 0), w: side.rows.reduce((t, r) => t + r.w, 0) });
+    const sSum = sumOf(S), tSum = sumOf(T);
+    const cmax = Math.max(both[0]?.k || 0, Math.abs(S.rest), Math.abs(T.rest), 0.01);
+    const cbar = (r, max = cmax) => r ? `<div>${dvBar(r.c, max)}<div class="cv mono"><b class="${sign(r.c)}">${pp(r.c * 3)}</b>${r.w !== undefined ? ` <span class="muted">${r.w.toFixed(1)}%</span>` : ''}</div></div>` : '<div class="cv muted">없음</div>';
+    const SHOW = 10, shown = gapAll ? both : both.slice(0, SHOW);
+    const tmax = Math.max(Math.abs(sSum.c), Math.abs(tSum.c), cmax);
+    const cmp = `<div class="cmp"><div class="hd">종목 · 등락</div><div class="hd">SOXL <span class="mono ${sign(S.etf)}">${pc(S.etf)}</span></div><div class="hd">TECL <span class="mono ${sign(T.etf)}">${pc(T.etf)}</span></div>
+      ${shown.map(r => `<div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${cbar(r.s)}${cbar(r.u)}`).join('')}
+      <div class="sep"></div>
+      <div class="n"><b>80% 합계</b><small class="muted">${S.rows.length}·${T.rows.length}종목</small></div>${cbar(sSum, tmax)}${cbar(tSum, tmax)}
+      <div class="n muted">나머지 종목</div>${cbar({ c: S.rest }, tmax)}${cbar({ c: T.rest }, tmax)}</div>
+      ${both.length > SHOW ? `<button type="button" class="more" data-gapall>${gapAll ? '접기' : `전체 ${both.length}종목`}</button>` : ''}`;
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
-        ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<button type="button" data-gap="${e}" aria-pressed="${e === gapEtf}"><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></button>`).join('')}
+        ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<div><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></div>`).join('')}
       </div>
       <p class="sum">${esc(summary)}</p>
       <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
       <div class="why">${why}</div>
       <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>
-      <div class="qhead" style="margin-top:14px"><h3 style="margin:0">${gapEtf} ${pc(side.etf)} ${useShare ? '중 몫' : '줄다리기'}</h3>
-        <div class="tabs mini" id="gap-tabs" role="tablist" aria-label="지수">${['SOXL', 'TECL'].map(e => `<button type="button" role="tab" data-gap="${e}" aria-selected="${e === gapEtf}">${e}</button>`).join('')}</div></div>
-      ${useShare ? '' : `<p class="tug mono">올린 쪽 <b class="up">${pp(upSum * 3)}%p</b> vs 내린 쪽 <b class="down">${pp(downSum * 3)}%p</b></p>`}
-      <div class="table-wrap"><table aria-label="${gapEtf} 상위 10종목 기여">
-        <thead><tr><th>종목</th><th class="num">비중</th><th class="num">등락</th><th></th><th class="num">${useShare ? `${word} 중` : '줄다리기'}</th></tr></thead>
-        <tbody>${rows}<tr class="total"><td class="name">top10 합계</td><td class="num mono">${wSum.toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(cSum, Math.max(rmax, Math.abs(cSum)))}</td>${cell(cSum, '', true)}</tr>
-        <tr><td class="name muted">나머지 종목</td><td class="num mono muted">${Math.max(0, 100 - wSum).toFixed(1)}%</td><td></td><td class="bar-cell">${dvBar(side.rest, rmax)}</td>${cell(side.rest, 'muted')}</tr></tbody></table></div>
+      <h3>종목별 기여 · 비중 80%까지, 크게 움직인 순</h3>
+      ${cmp}
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
         <span class="mono">${md2(d.date)}</span><br><span class="mono ${sign(d.SOXL.etf)}">S ${pc(d.SOXL.etf)}</span> <span class="mono ${sign(d.TECL.etf)}">T ${pc(d.TECL.etf)}</span></button>`).join('')}</div>
-      <p class="src">몫 = 그 종목 때문에 움직인 양 ÷ 전체 · 막음 = 반대로 움직여 줄여 줌 · 작은 숫자는 ETF 기준 %p · 비중: ${esc(a.source || '')}</p>`;
+      <p class="src">기여 = 비중 × 등락 × 3 (ETF 기준 %p) · 몫 = 그 종목 때문에 움직인 양 ÷ 전체 · 막음 = 반대로 움직여 줄여 줌 · 비중: ${esc(a.source || '')}</p>`;
   }
   el('gap').addEventListener('click', ev => {
-    const t = ev.target.closest('button[data-gap]'), d = ev.target.closest('button[data-gapday]');
-    if (t) gapEtf = t.dataset.gap;
+    const m = ev.target.closest('button[data-gapall]'), d = ev.target.closest('button[data-gapday]');
+    if (m) gapAll = !gapAll;
     else if (d) gapDay = +d.dataset.gapday;
     else return;
     renderGap();

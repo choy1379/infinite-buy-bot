@@ -4,7 +4,7 @@ import io
 import unittest
 import zipfile
 
-from laoer.attrib import FALLBACK, Attrib, analyze, day_change, message, parse_holdings_csv, parse_xlk_xlsx
+from laoer.attrib import FALLBACK, Attrib, analyze, cut_weights, day_change, message, parse_holdings_csv, parse_xlk_xlsx
 
 CSV = '''Direxion Shares ETF Trust
 Direxion Daily Semiconductor Bull 3X Shares
@@ -42,6 +42,11 @@ class AttribTest(unittest.TestCase):
     def test_direxion_csv_keeps_stocks_only(self):
         self.assertEqual(parse_holdings_csv(CSV), {"NVDA": 60.0, "MU": 40.0})
 
+    def test_cut_takes_until_80_percent(self):
+        ws = {"A": 40, "B": 30, "C": 15, "D": 10, "E": 5}
+        self.assertEqual(list(cut_weights(ws)), ["A", "B", "C"])  # 70% → C로 85%
+        self.assertEqual(list(cut_weights({"A": 50, "B": 30, "C": 20})), ["A", "B"])  # 딱 80%면 멈춤
+
     def test_xlk_xlsx(self):
         data = xlsx([["Fund Name:", "XLK"], ["Name", "Ticker", "Identifier", "Weight"],
                      ["APPLE", "AAPL", "x", 13.2], ["MICROSOFT", "MSFT", "y", 12.1], ["CASH", "", "", 0.1]])
@@ -62,7 +67,7 @@ class AttribTest(unittest.TestCase):
         self.assertAlmostEqual(a["SOXL"]["rest"], -5 / 3 - (-0.24 - 0.56))
         text = message("2026-11-04", a, moves, "test").text()
         self.assertIn("11/04 SOXL -5.0% · TECL +0.0%", text)
-        self.assertIn("애플 +5.0%", text)
+        self.assertIn("애플 +5.0% · – · +1.95", text)  # SOXL엔 없음, TECL 0.65×3
 
     def test_only_failed_side_falls_back(self):
         class R(io.BytesIO):

@@ -1,4 +1,4 @@
-"""SOXL vs TECL 하루 차이 분해: 각 기초지수 상위 10종목의 비중 × 등락률(기여도)."""
+"""SOXL vs TECL 하루 차이 분해: 각 기초지수 비중 누적 80%까지 종목의 비중 × 등락률(기여도)."""
 
 from __future__ import annotations
 
@@ -35,11 +35,24 @@ NAMES = {"NVDA": "엔비디아", "AAPL": "애플", "MSFT": "MS", "AVGO": "브로
          "CSCO": "시스코", "IBM": "IBM", "CRM": "세일즈포스", "ADBE": "어도비", "NOW": "서비스나우", "INTU": "인튜이트"}
 
 
+CUT = 80  # 비중 큰 순으로 누적 80%가 될 때까지 가져옴
+
+
 def _name(t: str) -> str:
     return NAMES.get(t, t)
 
 
-def parse_holdings_csv(text: str, n: int = 10) -> dict[str, float]:
+def cut_weights(ws: dict[str, float], cut: float = CUT) -> dict[str, float]:
+    """비중 큰 순으로, 앞 종목 누적이 전체의 cut%에 닿을 때까지 (닿게 만든 종목 포함)."""
+    total, acc, out = sum(ws.values()), 0.0, {}
+    for t, w in sorted(ws.items(), key=lambda kv: -kv[1]):
+        if acc >= total * cut / 100:
+            break
+        out[t], acc = w, acc + w
+    return out
+
+
+def parse_holdings_csv(text: str, cut: float = CUT) -> dict[str, float]:
     """Direxion 보유 CSV: 'Ticker'와 비중(Percent/Weight) 열이 있는 헤더부터 읽는다.
     스왑·현금은 빼고 주식만 합 100%로 다시 맞춘다 (3배 ETF는 주식+스왑으로 지수를 따라가서)."""
     lines = text.splitlines()
@@ -67,7 +80,7 @@ def parse_holdings_csv(text: str, n: int = 10) -> dict[str, float]:
     total = sum(out.values())
     if total <= 0:
         raise ValueError("주식 종목 0개")
-    return dict(sorted(((t, w / total * 100) for t, w in out.items()), key=lambda kv: -kv[1])[:n])
+    return cut_weights({t: w / total * 100 for t, w in out.items()}, cut)
 
 
 def _xlsx_rows(data: bytes) -> list[list[str]]:
@@ -96,7 +109,7 @@ def _xlsx_rows(data: bytes) -> list[list[str]]:
     return rows
 
 
-def parse_xlk_xlsx(data: bytes, n: int = 10) -> dict[str, float]:
+def parse_xlk_xlsx(data: bytes, cut: float = CUT) -> dict[str, float]:
     """SSGA 보유종목 xlsx: 'Ticker'·'Weight' 헤더 줄 아래가 종목."""
     rows = _xlsx_rows(data)
     h = next(i for i, r in enumerate(rows) if "Ticker" in r and "Weight" in r)
@@ -108,7 +121,7 @@ def parse_xlk_xlsx(data: bytes, n: int = 10) -> dict[str, float]:
                 out[r[ti].strip()] = float(r[wi])
             except ValueError:
                 continue
-    return dict(sorted(out.items(), key=lambda kv: -kv[1])[:n])
+    return cut_weights(out, cut)
 
 
 def day_change(body: dict) -> tuple[str, float]:
@@ -133,16 +146,19 @@ def analyze(weights: dict[str, dict[str, float]], moves: dict[str, float]) -> di
 
 
 def message(day: str, a: dict, moves: dict[str, float], source: str) -> Message:
+    """기여는 ETF 기준 %p (지수 기여 × 3). 두 ETF를 종목별로 나란히."""
     s, t = a["SOXL"], a["TECL"]
+    x3 = lambda v: f"{v * 3:+.2f}"
     lines = [f"기초지수(÷3) 반도체 {s['index']:+.1f}% · 기술주 {t['index']:+.1f}%", "", "차이를 만든 종목 (TECL 기여 − SOXL 기여)"]
     for tk, g in a["gap"]:
-        lines.append(f"· {_name(tk)} {moves[tk]:+.1f}% → {g:+.2f}%p")
-    for etf in ("SOXL", "TECL"):
-        v = a[etf]
-        top = sorted(v["rows"], key=lambda r: r[3])
-        lines += ["", f"{etf} top10 (비중 · 등락 · 기여)"]
-        lines += [f"{_name(tk)} {w:.0f}% · {m:+.1f}% · {c:+.2f}%p" for tk, w, m, c in top]
-        lines.append(f"나머지 종목 {v['rest']:+.2f}%p")
+        lines.append(f"· {_name(tk)} {moves[tk]:+.1f}% → {x3(g)}%p")
+    cs = {tk: c for tk, _, _, c in s["rows"]}
+    ct = {tk: c for tk, _, _, c in t["rows"]}
+    both = sorted(set(cs) | set(ct), key=lambda tk: -max(abs(cs.get(tk, 0)), abs(ct.get(tk, 0))))
+    side = lambda d, tk: x3(d[tk]) if tk in d else "–"
+    lines += ["", f"많이 움직인 종목 (SOXL · TECL 기여 %p, 비중 80%: {len(cs)}·{len(ct)}종목)"]
+    lines += [f"{_name(tk)} {moves[tk]:+.1f}% · {side(cs, tk)} · {side(ct, tk)}" for tk in both[:8]]
+    lines.append(f"나머지 종목 {x3(s['rest'])} · {x3(t['rest'])}")
     lines += ["", f"비중: {source}"]
     return Message(f"📊 {day[5:].replace('-', '/')} SOXL {s['etf']:+.1f}% · TECL {t['etf']:+.1f}% 차이", lines)
 
