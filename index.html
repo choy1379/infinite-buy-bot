@@ -20,6 +20,7 @@
     --low: #b25e00; --low-bg: #fff3e0;
     --bad: #e42939; --bad-bg: #ffeeee;
     --buy: #e42939; --sell: #2272eb;   /* 한국식: 매수 빨강, 매도 파랑 */
+    --seg0: #6d5dfc; --seg1: #0f9f8f; --seg2: #f5a524; --seg3: #d5d9de; --segink: #fff;   /* 차이 쌓은 막대: 오름·내림 색과 안 겹치게 */
     --font-body: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     --font-mono: var(--font-body);
     color-scheme: only light;   /* only: 폰 브라우저의 강제 어둡게(자동 다크)를 막음 */
@@ -31,6 +32,7 @@
       --lvl-op: .38; --track: #3a3a44; --tab-off: #c4c4cc; --tab-bg: #2c2c34; --tab-on: #474752;
       --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
       --buy: #ff6b76; --sell: #5b9dff;
+      --seg0: #8b7dff; --seg1: #2cc4b1; --seg2: #f7b445; --seg3: #5a606a; --segink: #15161a;
       color-scheme: dark;
     }
   }
@@ -40,6 +42,7 @@
     --lvl-op: .38; --track: #3a3a44; --tab-off: #c4c4cc; --tab-bg: #2c2c34; --tab-on: #474752;
     --ok: #3fcf83; --ok-bg: #16301f; --low: #f5a83c; --low-bg: #3a2a12; --bad: #ff6b76; --bad-bg: #3b1c20;
     --buy: #ff6b76; --sell: #5b9dff;
+    --seg0: #8b7dff; --seg1: #2cc4b1; --seg2: #f7b445; --seg3: #5a606a; --segink: #15161a;
     color-scheme: dark;
   }
 
@@ -199,10 +202,10 @@
   .gap .gh .big { display: block; font-size: 1.7rem; font-weight: 700; line-height: 1.25; }
   .gap .stack { display: flex; gap: 2px; height: 30px; border-radius: 8px; overflow: hidden; }
   .gap .stack span { display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.8rem; font-weight: 700; }
-  .gap .s0 { background: var(--ink); color: var(--surface); }
-  .gap .s1 { background: color-mix(in srgb, var(--ink) 62%, var(--surface)); color: var(--surface); }
-  .gap .s2 { background: color-mix(in srgb, var(--ink) 32%, var(--surface)); color: var(--ink); }
-  .gap .s3 { background: var(--line); color: var(--muted); }
+  .gap .s0 { background: var(--seg0); color: var(--segink); }
+  .gap .s1 { background: var(--seg1); color: var(--segink); }
+  .gap .s2 { background: var(--seg2); color: #1a1a1a; }
+  .gap .s3 { background: var(--seg3); color: var(--ink); }
   .gap .lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; }
   .gap .lg i { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
   .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; color: var(--muted); font-size: 0.76rem; }
