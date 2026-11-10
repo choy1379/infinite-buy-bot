@@ -208,7 +208,8 @@
   .gap .s3 { background: var(--seg3); color: var(--ink); }
   .gap .lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; }
   .gap .lg i { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
-  .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; color: var(--muted); font-size: 0.76rem; }
+  .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; margin-top: 3px; font-size: 0.86rem; font-weight: 600; }
+  .gap .lg .nums { display: block; margin-top: 2px; color: var(--muted); font-size: 0.8rem; } .gap .lg .nums b { font-weight: 600; }
   .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.1rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
   .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.8fr); gap: 0 12px; align-items: center; font-size: 0.88rem; }
   .gap .cmp > div { padding: 7px 0; border-bottom: 1px solid var(--line); }
@@ -1433,18 +1434,26 @@
         + (others >= 0 ? ` 나머지 ${Math.round(others)}%는 다른 종목 몫이에요.` : ` 다른 종목이 반대로 움직여 ${Math.round(-others)}% 줄여 줬어요.`);
     // 차이 쪼개기: 두 ETF 차이를 100%로 놓고 상위 3종목 + 다른 종목 몫을 한 줄 막대로
     const gapAbs = Math.abs(gapTotal * 3), restC = gapTotal - a.gap.reduce((t, g) => t + g.c, 0);
-    const whereOf = g => { const cs = cOf(S, g.t), ct = cOf(T, g.t); return !cs ? 'TECL에만 있음' : !ct ? 'SOXL에만 있음' : Math.abs(cs) > Math.abs(ct) ? 'SOXL 비중 큼' : 'TECL 비중 큼'; };
+    // 한 문장: 왜 이 종목이 차이를 만들었나 (어디에 더 많이 있고, 그래서 어느 쪽이 더 오르고/빠졌나)
+    const whereOf = g => {
+      const cs = cOf(S, g.t), ct = cOf(T, g.t), mv = g.m >= 0 ? '오름' : '빠짐';
+      if (!cs) return `TECL에만 있어서 TECL만 ${mv}`;
+      if (!ct) return `SOXL에만 있어서 SOXL만 ${mv}`;
+      const e = Math.abs(cs) > Math.abs(ct) ? 'SOXL' : 'TECL';
+      return `${e} 비중이 더 커서 ${e}이 더 ${g.m >= 0 ? '오름' : '빠짐'}`;
+    };
+    const numsOf = g => `<span class="nums mono">TECL <b class="${sign(cOf(T, g.t))}">${pp(cOf(T, g.t) * 3)}</b> · SOXL <b class="${sign(cOf(S, g.t))}">${pp(cOf(S, g.t) * 3)}</b> %p</span>`;
     const segs = [...a.gap.map((g, i) => ({ s: share(g.c, gapTotal), cls: `s${i}` })), { s: share(restC, gapTotal), cls: 's3' }].filter(x => x.s > 0);
     const segSum = segs.reduce((t, x) => t + x.s, 0);
     const topShare = a.gap.reduce((t, g) => t + (share(g.c, gapTotal) || 0), 0);
     const pOf = c => `${pp(c / gapTotal * gapAbs)}%p`;   // 차이 방향으로 보탠 양 (− = 막음)
-    const lg = (cls, name, m, d, c) => `<div class="lg"><i class="${cls}"></i><div class="n">${esc(name)}${m === null ? '' : `<small class="mono ${sign(m)}">${pc(m)}</small>`}<span class="d mono">${d}</span></div>
+    const lg = (cls, name, m, d, c) => `<div class="lg"><i class="${cls}"></i><div class="n">${esc(name)}${m === null ? '' : `<small class="mono ${sign(m)}">${pc(m)}</small>`}${d}</div>
       <div class="v mono"><b>${shareTxt(share(c, gapTotal))}</b><small>${pOf(c)}</small></div></div>`;
     const split = share(gapTotal, gapTotal) === null ? '' : `<p class="gh">두 ETF 차이 · ${gapTotal > 0 ? 'TECL' : 'SOXL'} 쪽이 높음<span class="big mono">${gapAbs.toFixed(1)}%p</span>
         그중 <b>${Math.round(topShare)}%</b>가 ${esc(a.gap.map(g => g.name).join('·'))} ${a.gap.length}종목</p>
       <div class="stack" role="img" aria-label="차이 몫">${segs.map(x => `<span class="${x.cls}" style="width:${x.s / segSum * 100}%">${x.s / segSum >= 0.12 ? `${Math.round(x.s)}%` : ''}</span>`).join('')}</div>
-      <div style="margin-top:6px">${a.gap.map((g, i) => lg(`s${i}`, g.name, g.m, `${whereOf(g)} · TECL ${pp(cOf(T, g.t) * 3)} · SOXL ${pp(cOf(S, g.t) * 3)}`, g.c)).join('')}
-      ${lg('s3', '다른 종목', null, '나머지 전부', restC)}</div>`;
+      <div style="margin-top:6px">${a.gap.map((g, i) => lg(`s${i}`, g.name, g.m, `<span class="d">${whereOf(g)}</span>${numsOf(g)}`, g.c)).join('')}
+      ${lg('s3', '다른 종목', null, '<span class="nums">위 3종목 말고 전부</span>', restC)}</div>`;
     // 종목별 나란히: 두 ETF 80% 종목을 합쳐 기여가 큰(많이 오르거나 빠진) 순
     const bySide = side => Object.fromEntries(side.rows.map(r => [r.t, r]));
     const sm = bySide(S), tm = bySide(T);
