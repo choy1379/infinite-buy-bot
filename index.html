@@ -218,7 +218,10 @@
   .gap .cmp .pair .k { color: var(--muted); }
   .gap .cmp .pair .v { text-align: right; font-weight: 600; }
   .gap .cmp .pair .dv { height: 10px; }
-  .gap .cmp .tot { font-weight: 600; }
+  .gap .totbox { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 18px; margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--soft); font-size: 0.88rem; }
+  .gap .totbox .h { color: var(--muted); font-size: 0.78rem; text-align: right; }
+  .gap .totbox .num { text-align: right; }
+  .gap .totbox .all { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; }
   .gap .more { display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 8px; cursor: pointer; }
   .gap .days { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
   .gap .days button { flex: none; border: 0; background: var(--soft); color: var(--ink); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 0.78rem; line-height: 1.35; text-align: left; cursor: pointer; }
@@ -1461,12 +1464,14 @@
       : `<span class="k">${k}</span><span class="muted">없음</span><span class="v muted">–</span>`;
     const pair = (s, u, max = cmax) => `<div class="pair">${line('SOXL', s, max)}${line('TECL', u, max)}</div>`;
     const SHOW = 10, shown = gapAll ? both : both.slice(0, SHOW);
-    const tmax = Math.max(Math.abs(sSum.c), Math.abs(tSum.c), cmax);
     const cmp = `<div class="cmp"><div class="hd">종목 · 등락</div><div class="hd">기여 %p (ETF 기준)</div>
       ${shown.map(r => `<div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${pair(r.s, r.u)}`).join('')}
-      <div class="n tot">80% 합계<small class="muted">${S.rows.length}·${T.rows.length}종목</small></div>${pair(sSum, tSum, tmax)}
-      <div class="n muted">나머지 종목</div>${pair({ c: S.rest }, { c: T.rest }, tmax)}</div>
-      ${both.length > SHOW ? `<button type="button" class="more" data-gapall>${gapAll ? '접기' : `전체 ${both.length}종목`}</button>` : ''}`;
+      </div>
+      ${both.length > SHOW ? `<button type="button" class="more" data-gapall>${gapAll ? '접기' : `전체 ${both.length}종목`}</button>` : ''}
+      <div class="totbox"><span></span><span class="h">SOXL</span><span class="h">TECL</span>
+        <span>80% 종목 <small class="muted">${S.rows.length}·${T.rows.length}개</small></span><span class="num mono ${sign(sSum.c)}">${pp(sSum.c * 3)}%p</span><span class="num mono ${sign(tSum.c)}">${pp(tSum.c * 3)}%p</span>
+        <span>나머지 종목</span><span class="num mono ${sign(S.rest)}">${pp(S.rest * 3)}%p</span><span class="num mono ${sign(T.rest)}">${pp(T.rest * 3)}%p</span>
+        <span class="all">ETF 전체</span><span class="all num mono ${sign(S.etf)}">${pc(S.etf)}</span><span class="all num mono ${sign(T.etf)}">${pc(T.etf)}</span></div>`;
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
         ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<div><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></div>`).join('')}
