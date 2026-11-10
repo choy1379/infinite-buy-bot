@@ -195,6 +195,18 @@
   .gap .dv span { position: absolute; top: 0; height: 100%; border-radius: 4px; }
   .gap .dv span.up { background: var(--buy); } .gap .dv span.down { background: var(--sell); }
   .gap .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
+  .gap .gh { margin: 4px 0 10px; font-size: 0.95rem; line-height: 1.5; }
+  .gap .gh .big { display: block; font-size: 1.7rem; font-weight: 700; line-height: 1.25; }
+  .gap .stack { display: flex; gap: 2px; height: 30px; border-radius: 8px; overflow: hidden; }
+  .gap .stack span { display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.8rem; font-weight: 700; }
+  .gap .s0 { background: var(--ink); color: var(--surface); }
+  .gap .s1 { background: color-mix(in srgb, var(--ink) 62%, var(--surface)); color: var(--surface); }
+  .gap .s2 { background: color-mix(in srgb, var(--ink) 32%, var(--surface)); color: var(--ink); }
+  .gap .s3 { background: var(--line); color: var(--muted); }
+  .gap .lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; }
+  .gap .lg i { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
+  .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; color: var(--muted); font-size: 0.76rem; }
+  .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.1rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
   .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.8fr) 1fr 1fr; gap: 2px 12px; align-items: center; font-size: 0.88rem; }
   .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; text-align: center; padding-bottom: 4px; }
   .gap .cmp .hd:first-child { text-align: left; }
@@ -1414,6 +1426,20 @@
       : `${main.where} ${names}${ga(names)} ${main.verb} 차이의 ${Math.round(mainShare)}%${mainShare >= 50 ? '(절반 이상)' : ''}가 생겼어요.`
         + (rest.length ? ` ${rest.join(', ')} 몫이고,` : '')
         + (others >= 0 ? ` 나머지 ${Math.round(others)}%는 다른 종목 몫이에요.` : ` 다른 종목이 반대로 움직여 ${Math.round(-others)}% 줄여 줬어요.`);
+    // 차이 쪼개기: 두 ETF 차이를 100%로 놓고 상위 3종목 + 다른 종목 몫을 한 줄 막대로
+    const gapAbs = Math.abs(gapTotal * 3), restC = gapTotal - a.gap.reduce((t, g) => t + g.c, 0);
+    const whereOf = g => { const cs = cOf(S, g.t), ct = cOf(T, g.t); return !cs ? 'TECL에만 있음' : !ct ? 'SOXL에만 있음' : Math.abs(cs) > Math.abs(ct) ? 'SOXL 비중 큼' : 'TECL 비중 큼'; };
+    const segs = [...a.gap.map((g, i) => ({ s: share(g.c, gapTotal), cls: `s${i}` })), { s: share(restC, gapTotal), cls: 's3' }].filter(x => x.s > 0);
+    const segSum = segs.reduce((t, x) => t + x.s, 0);
+    const topShare = a.gap.reduce((t, g) => t + (share(g.c, gapTotal) || 0), 0);
+    const pOf = c => `${pp(c / gapTotal * gapAbs)}%p`;   // 차이 방향으로 보탠 양 (− = 막음)
+    const lg = (cls, name, m, d, c) => `<div class="lg"><i class="${cls}"></i><div class="n">${esc(name)}${m === null ? '' : `<small class="mono ${sign(m)}">${pc(m)}</small>`}<span class="d mono">${d}</span></div>
+      <div class="v mono"><b>${shareTxt(share(c, gapTotal))}</b><small>${pOf(c)}</small></div></div>`;
+    const split = share(gapTotal, gapTotal) === null ? '' : `<p class="gh">두 ETF 차이 · ${gapTotal > 0 ? 'TECL' : 'SOXL'} 쪽이 높음<span class="big mono">${gapAbs.toFixed(1)}%p</span>
+        그중 <b>${Math.round(topShare)}%</b>가 ${esc(a.gap.map(g => g.name).join('·'))} ${a.gap.length}종목</p>
+      <div class="stack" role="img" aria-label="차이 몫">${segs.map(x => `<span class="${x.cls}" style="width:${x.s / segSum * 100}%">${x.s / segSum >= 0.12 ? `${Math.round(x.s)}%` : ''}</span>`).join('')}</div>
+      <div style="margin-top:6px">${a.gap.map((g, i) => lg(`s${i}`, g.name, g.m, `${whereOf(g)} · TECL ${pp(cOf(T, g.t) * 3)} · SOXL ${pp(cOf(S, g.t) * 3)}`, g.c)).join('')}
+      ${lg('s3', '다른 종목', null, '나머지 전부', restC)}</div>`;
     // 종목별 나란히: 두 ETF 80% 종목을 합쳐 기여가 큰(많이 오르거나 빠진) 순
     const bySide = side => Object.fromEntries(side.rows.map(r => [r.t, r]));
     const sm = bySide(S), tm = bySide(T);
@@ -1437,10 +1463,10 @@
       <div class="big">
         ${[['SOXL', '반도체', S], ['TECL', '기술주', T]].map(([e, k, v]) => `<div><span class="label">${e} · ${k}</span><b class="mono ${sign(v.etf)}">${pc(v.etf)}</b><span class="sub mono">기초지수 ${pc(v.index, 2)}</span></div>`).join('')}
       </div>
-      <p class="sum">${esc(summary)}</p>
-      <h3>차이 원인 · 두 ETF 차이 ${Math.abs(gapTotal * 3).toFixed(1)}%p 중 몫</h3>
+      ${split || `<p class="sum">${esc(summary)}</p>
+      <h3>차이 원인 · 두 ETF 차이 ${gapAbs.toFixed(1)}%p</h3>
       <div class="why">${why}</div>
-      <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>
+      <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>`}
       <h3>종목별 기여 · 비중 80%까지, 크게 움직인 순</h3>
       ${cmp}
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
