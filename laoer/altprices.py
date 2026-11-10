@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 SYMBOLS = ("TECL", "SOXL", "TQQQ")
-URL = "https://query1.finance.yahoo.com/v8/finance/chart/{}?range=1y&interval=1d"
+URL = "https://query1.finance.yahoo.com/v8/finance/chart/{}?range={}&interval=1d"
 NY = ZoneInfo("America/New_York")
 
 
@@ -31,8 +31,8 @@ def parse(chart: dict) -> dict[str, float]:
     return out
 
 
-def fetch(symbol: str, opener=None, timeout: float = 20) -> dict[str, float]:
-    req = urllib.request.Request(URL.format(symbol), headers={"User-Agent": "Mozilla/5.0"})
+def fetch(symbol: str, opener=None, timeout: float = 20, rng: str = "1y") -> dict[str, float]:
+    req = urllib.request.Request(URL.format(symbol, rng), headers={"User-Agent": "Mozilla/5.0"})
     with (opener or urllib.request.build_opener()).open(req, timeout=timeout) as r:
         return parse(json.load(r))
 
