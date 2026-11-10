@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("notify", help="설정된 알림 채널로 문구를 그대로 보냄 (예: 승인 필요)")
     p.add_argument("text", nargs="+", help="보낼 문구 (첫 줄이 제목, 여러 단어는 따옴표로 묶기)")
     p.add_argument("--level", choices=["info", "success", "warn", "error"], default="info")
-    p = sub.add_parser("attrib", help="어제 SOXL vs TECL 차이 원인(상위 10종목 기여도)을 보여주고 대시보드용으로 저장")
+    p = sub.add_parser("attrib", help="어제 SOXL vs TECL 차이 원인(비중 80%까지 종목 기여도)을 보여주고 대시보드용으로 저장")
     p.add_argument("--notify", action="store_true", help="알림으로도 보냄")
     sub.add_parser("kakao-login", help="카카오 '나에게 보내기' 토큰 발급")
     sub.add_parser("market", help="'시장' 탭 선물 시세가 받아지는지 확인 (설정 불필요)")
