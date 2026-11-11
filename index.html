@@ -198,19 +198,22 @@
   .gap .dv span { position: absolute; top: 0; height: 100%; border-radius: 4px; }
   .gap .dv span.up { background: var(--buy); } .gap .dv span.down { background: var(--sell); }
   .gap .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
-  .gap .gh { margin: 4px 0 10px; font-size: 0.95rem; line-height: 1.5; }
-  .gap .gh .big { display: block; font-size: 1.7rem; font-weight: 700; line-height: 1.25; }
+  .gap .hl { background: var(--soft); border-radius: 14px; padding: 14px 14px 4px; margin: 0 0 6px; }
+  .gap .hl .t { margin: 0; font-size: 0.92rem; color: var(--muted); }
+  .gap .hl .hb { margin: 2px 0 6px; font-size: 1.7rem; font-weight: 700; line-height: 1.25; }
+  .gap .hl .eq { margin: 0 0 12px; font-size: 0.9rem; line-height: 1.6; }
+  .gap .hl .eq b { font-weight: 700; } .gap .hl .eq i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 3px 0 1px; }
   .gap .stack { display: flex; gap: 2px; height: 30px; border-radius: 8px; overflow: hidden; }
   .gap .stack span { display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.8rem; font-weight: 700; }
   .gap .s0 { background: var(--seg0); color: var(--segink); }
   .gap .s1 { background: var(--seg1); color: var(--segink); }
   .gap .s2 { background: var(--seg2); color: #1a1a1a; }
   .gap .s3 { background: var(--seg3); color: var(--ink); }
-  .gap .lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; }
+  .gap .lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
   .gap .lg i { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
   .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; margin-top: 3px; font-size: 0.86rem; font-weight: 600; }
   .gap .lg .nums { display: block; margin-top: 2px; color: var(--muted); font-size: 0.8rem; } .gap .lg .nums b { font-weight: 600; }
-  .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.1rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
+  .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.15rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
   .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.8fr); gap: 0 12px; align-items: center; font-size: 0.88rem; }
   .gap .cmp > div { padding: 7px 0; border-bottom: 1px solid var(--line); }
   .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; padding-top: 0; }
@@ -1445,15 +1448,22 @@
     const numsOf = g => `<span class="nums mono">TECL <b class="${sign(cOf(T, g.t))}">${pp(cOf(T, g.t) * 3)}</b> · SOXL <b class="${sign(cOf(S, g.t))}">${pp(cOf(S, g.t) * 3)}</b> %p</span>`;
     const segs = [...a.gap.map((g, i) => ({ s: share(g.c, gapTotal), cls: `s${i}` })), { s: share(restC, gapTotal), cls: 's3' }].filter(x => x.s > 0);
     const segSum = segs.reduce((t, x) => t + x.s, 0);
-    const topShare = a.gap.reduce((t, g) => t + (share(g.c, gapTotal) || 0), 0);
-    const pOf = c => `${pp(c / gapTotal * gapAbs)}%p`;   // 차이 방향으로 보탠 양 (− = 막음)
+    const amt = c => c / gapTotal * gapAbs;   // 차이에 보탠 %p (− = 반대로 움직여 줄여 줌)
+    const vTxt = c => amt(c) >= 0 ? `${amt(c).toFixed(2)}%p` : `막음 ${(-amt(c)).toFixed(2)}%p`;
     const lg = (cls, name, m, d, c) => `<div class="lg"><i class="${cls}"></i><div class="n">${esc(name)}${m === null ? '' : `<small class="mono ${sign(m)}">${pc(m)}</small>`}${d}</div>
-      <div class="v mono"><b>${shareTxt(share(c, gapTotal))}</b><small>${pOf(c)}</small></div></div>`;
-    const split = share(gapTotal, gapTotal) === null ? '' : `<p class="gh">두 ETF 차이 · ${gapTotal > 0 ? 'TECL' : 'SOXL'} 쪽이 높음<span class="big mono">${gapAbs.toFixed(1)}%p</span>
-        그중 <b>${Math.round(topShare)}%</b>가 ${esc(a.gap.map(g => g.name).join('·'))} ${a.gap.length}종목</p>
-      <div class="stack" role="img" aria-label="차이 몫">${segs.map(x => `<span class="${x.cls}" style="width:${x.s / segSum * 100}%">${x.s / segSum >= 0.12 ? `${Math.round(x.s)}%` : ''}</span>`).join('')}</div>
-      <div style="margin-top:6px">${a.gap.map((g, i) => lg(`s${i}`, g.name, g.m, `<span class="d">${whereOf(g)}</span>${numsOf(g)}`, g.c)).join('')}
-      ${lg('s3', '다른 종목', null, '<span class="nums">위 3종목 말고 전부</span>', restC)}</div>`;
+      <div class="v mono"><b>${vTxt(c)}</b><small>몫 ${Math.round(share(c, gapTotal))}%</small></div></div>`;
+    const lowE = gapTotal > 0 ? 'SOXL' : 'TECL', highE = lowE === 'SOXL' ? 'TECL' : 'SOXL';
+    const lowV = (lowE === 'SOXL' ? S : T).etf, highV = (lowE === 'SOXL' ? T : S).etf;
+    const verb = lowV < 0 && highV <= 0 ? '더 빠짐' : lowV >= 0 && highV > 0 ? '덜 오름' : '뒤처짐';
+    const parts = [...a.gap.map((g, i) => ({ name: g.name, c: g.c, cls: `s${i}` })), { name: '다른 종목', c: restC, cls: 's3' }];
+    const eq = parts.map((x, i) => `${i ? (amt(x.c) >= 0 ? ' + ' : ' − ') : ''}<span style="white-space:nowrap"><i class="${x.cls}"></i>${esc(x.name)} <b class="mono">${Math.abs(amt(x.c)).toFixed(2)}</b></span>`).join('');
+    const split = share(gapTotal, gapTotal) === null ? '' : `<div class="hl"><p class="t">${lowE}이 ${highE}보다</p>
+      <p class="hb mono">${gapAbs.toFixed(1)}%p ${verb}</p>
+      <p class="eq">= ${eq}</p>
+      <div class="stack" role="img" aria-label="차이 몫">${segs.map(x => { const w = x.s / segSum; const nm = parts.find(p => p.cls === x.cls).name;
+        return `<span class="${x.cls}" style="width:${w * 100}%">${w >= 0.24 ? `${esc(nm)} ${Math.round(x.s)}%` : w >= 0.1 ? `${Math.round(x.s)}%` : ''}</span>`; }).join('')}</div>
+      <div style="margin-top:8px">${a.gap.map((g, i) => lg(`s${i}`, g.name, g.m, `<span class="d">${whereOf(g)}</span>${numsOf(g)}`, g.c)).join('')}
+      ${lg('s3', '다른 종목', null, '<span class="nums">위 3종목 말고 전부</span>', restC)}</div></div>`;
     // 종목별 나란히: 두 ETF 80% 종목을 합쳐 기여가 큰(많이 오르거나 빠진) 순
     const bySide = side => Object.fromEntries(side.rows.map(r => [r.t, r]));
     const sm = bySide(S), tm = bySide(T);
