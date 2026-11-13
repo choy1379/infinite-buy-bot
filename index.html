@@ -214,14 +214,19 @@
   .gap .lg .n small { margin-left: 4px; } .gap .lg .d { display: block; margin-top: 3px; font-size: 0.86rem; font-weight: 600; }
   .gap .lg .nums { display: block; margin-top: 2px; color: var(--muted); font-size: 0.8rem; } .gap .lg .nums b { font-weight: 600; }
   .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.15rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
-  .gap .cmp { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.8fr); gap: 0 12px; align-items: center; font-size: 0.88rem; }
-  .gap .cmp > div { padding: 7px 0; border-bottom: 1px solid var(--line); }
-  .gap .cmp .hd { color: var(--muted); font-size: 0.78rem; padding-top: 0; }
-  .gap .cmp .n small { display: block; font-size: 0.76rem; }
-  .gap .cmp .pair { display: grid; grid-template-columns: 2.6em minmax(0, 1fr) 3.4em; gap: 3px 6px; align-items: center; font-size: 0.76rem; }
-  .gap .cmp .pair .k { color: var(--muted); }
-  .gap .cmp .pair .v { text-align: right; font-weight: 600; }
-  .gap .cmp .pair .dv { height: 10px; }
+  .gap .rk { display: grid; grid-template-columns: 22px 28px minmax(0, 0.8fr) minmax(0, 1.7fr); gap: 10px; align-items: center; padding: 9px 0; font-size: 0.88rem; }
+  .gap .rk + .rk { border-top: 1px solid var(--line); }
+  .gap .rk .no { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--soft); color: var(--muted); font-size: 0.74rem; font-weight: 700; }
+  .gap .rk .logo { width: 28px; height: 28px; border-radius: 50%; object-fit: contain; background: #fff; }
+  .gap .rk .logo.txt { display: grid; place-items: center; background: var(--soft); color: var(--ink); font-size: 0.6rem; font-weight: 700; overflow: hidden; }
+  .gap .rk .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gap .rk .n small { display: block; font-size: 0.76rem; font-weight: 400; }
+  .gap .rk .pair { display: grid; grid-template-columns: 2.6em minmax(0, 1fr) 3.2em; gap: 4px 6px; align-items: center; font-size: 0.76rem; }
+  .gap .rk .k { color: var(--muted); }
+  .gap .rk .v { text-align: right; font-weight: 600; }
+  .gap .hb10 { display: block; height: 10px; border-radius: 0 5px 5px 0; min-width: 2px; }
+  .gap .hb10.up { background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 45%, transparent), var(--buy)); }
+  .gap .hb10.down { background: linear-gradient(90deg, color-mix(in srgb, var(--sell) 45%, transparent), var(--sell)); }
   .gap .more { display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 8px; cursor: pointer; }
   .gap .days { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
   .gap .days button { flex: none; border: 0; background: var(--soft); color: var(--ink); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 0.78rem; line-height: 1.35; text-align: left; cursor: pointer; }
@@ -1469,19 +1474,19 @@
     const sm = bySide(S), tm = bySide(T);
     const both = [...new Set([...S.rows, ...T.rows].map(r => r.t))].map(t => {
       const r = sm[t] || tm[t];
-      return { name: r.name, m: r.m, s: sm[t], u: tm[t], k: Math.max(Math.abs(sm[t]?.c || 0), Math.abs(tm[t]?.c || 0)) };
+      return { t, name: r.name, m: r.m, s: sm[t], u: tm[t], k: Math.max(Math.abs(sm[t]?.c || 0), Math.abs(tm[t]?.c || 0)) };
     }).sort((p, q) => q.k - p.k);
     const sumOf = side => ({ c: side.rows.reduce((t, r) => t + r.c, 0), w: side.rows.reduce((t, r) => t + r.w, 0) });
     const sSum = sumOf(S), tSum = sumOf(T);
-    const cmax = Math.max(both[0]?.k || 0, Math.abs(S.rest), Math.abs(T.rest), 0.01);
-    // 한 종목에 SOXL·TECL 막대 두 줄, 같은 축이라 길이로 바로 비교
-    const line = (k, r, max) => r ? `<span class="k">${k}</span><span title="${r.w !== undefined ? `비중 ${r.w.toFixed(1)}%` : ''}">${dvBar(r.c, max)}</span><span class="v mono ${sign(r.c)}">${pp(r.c * 3)}</span>`
+    const cmax = Math.max(both[0]?.k || 0, 0.01);
+    // 순위 목록: 번호 · 로고 · 이름 · SOXL/TECL 막대 두 줄 (길이 = 기여 크기, 색 = 오름/빠짐)
+    const hbar = (c, max) => `<span class="hb10 ${c >= 0 ? 'up' : 'down'}" style="width:${Math.min(100, Math.abs(c) / max * 100)}%"></span>`;
+    const line = (k, r, max) => r ? `<span class="k">${k}</span><span title="${r.w !== undefined ? `비중 ${r.w.toFixed(1)}%` : ''}">${hbar(r.c, max)}</span><span class="v mono ${sign(r.c)}">${pp(r.c * 3)}</span>`
       : `<span class="k">${k}</span><span class="muted">없음</span><span class="v muted">–</span>`;
     const pair = (s, u, max = cmax) => `<div class="pair">${line('SOXL', s, max)}${line('TECL', u, max)}</div>`;
     const SHOW = 10, shown = gapAll ? both : both.slice(0, SHOW);
-    const cmp = `<div class="cmp"><div class="hd">종목 · 등락</div><div class="hd">기여 %p (ETF 기준)</div>
-      ${shown.map(r => `<div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${pair(r.s, r.u)}`).join('')}
-      </div>
+    const cmp = `<div class="rank">${shown.map((r, i) => `<div class="rk"><span class="no mono">${i + 1}</span>${logo({ symbol: r.t })}
+      <div class="n">${esc(r.name)}<small class="mono ${sign(r.m)}">${pc(r.m)}</small></div>${pair(r.s, r.u)}</div>`).join('')}</div>
       ${both.length > SHOW ? `<button type="button" class="more" data-gapall>${gapAll ? '접기' : `전체 ${both.length}종목`}</button>` : ''}`;
     box.innerHTML = `<div class="qhead"><h2>SOXL vs TECL</h2><span class="muted mono" style="font-size:0.82rem">${md2(a.date)} 종가</span></div>
       <div class="big">
@@ -1491,7 +1496,7 @@
       <h3>차이 원인 · 두 ETF 차이 ${gapAbs.toFixed(1)}%p</h3>
       <div class="why">${why}</div>
       <div class="axis"><span>SOXL 쪽에 유리</span><span>TECL 쪽에 유리</span></div>`}
-      <h3>종목별 기여 · 비중 80%까지, 크게 움직인 순</h3>
+      <h3>종목별 기여 %p · 비중 80%까지, 크게 움직인 순</h3>
       ${cmp}
       <div class="days" role="group" aria-label="날짜">${list.slice(0, 5).map((d, i) => `<button type="button" data-gapday="${i}" aria-pressed="${i === gapDay}">
         <span class="mono">${md2(d.date)}</span><br><span class="mono ${sign(d.SOXL.etf)}">S ${pc(d.SOXL.etf)}</span> <span class="mono ${sign(d.TECL.etf)}">T ${pc(d.TECL.etf)}</span></button>`).join('')}</div>
