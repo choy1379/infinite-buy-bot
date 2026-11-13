@@ -216,7 +216,6 @@
   .gap .lg .v { text-align: right; } .gap .lg .v b { font-size: 1.15rem; } .gap .lg .v small { display: block; color: var(--muted); font-size: 0.76rem; }
   .gap .rk { display: grid; grid-template-columns: 22px 28px minmax(0, 0.8fr) minmax(0, 1.7fr); gap: 10px; align-items: center; padding: 9px 0; font-size: 0.88rem; }
   .gap .rk + .rk { border-top: 1px solid var(--line); }
-  .gap .rk .no { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--soft); color: var(--muted); font-size: 0.74rem; font-weight: 700; }
   .gap .rk .logo { width: 28px; height: 28px; border-radius: 50%; object-fit: contain; background: #fff; }
   .gap .rk .logo.txt { display: grid; place-items: center; background: var(--soft); color: var(--ink); font-size: 0.6rem; font-weight: 700; overflow: hidden; }
   .gap .rk .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -224,9 +223,20 @@
   .gap .rk .pair { display: grid; grid-template-columns: 2.6em minmax(0, 1fr) 3.2em; gap: 4px 6px; align-items: center; font-size: 0.76rem; }
   .gap .rk .k { color: var(--muted); }
   .gap .rk .v { text-align: right; font-weight: 600; }
-  .gap .hb10 { display: block; height: 10px; border-radius: 0 5px 5px 0; min-width: 2px; }
-  .gap .hb10.up { background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 45%, transparent), var(--buy)); }
-  .gap .hb10.down { background: linear-gradient(90deg, color-mix(in srgb, var(--sell) 45%, transparent), var(--sell)); }
+  /* 순위 막대 목록: 번호 칩 · 이름 · 그라데이션 막대 · 오른쪽 숫자 (종목별 기여·선물 시세·사이클·계좌 비중) */
+  .hb10 { display: block; height: 10px; border-radius: 0 5px 5px 0; min-width: 2px; }
+  .hb10.up { background: linear-gradient(90deg, color-mix(in srgb, var(--buy) 45%, transparent), var(--buy)); }
+  .hb10.down { background: linear-gradient(90deg, color-mix(in srgb, var(--sell) 45%, transparent), var(--sell)); }
+  .hb10.acc { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 40%, transparent), var(--accent)); }
+  .no { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--muted); font-size: 0.74rem; font-weight: 700; }
+  .rl > div { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; font-size: 0.9rem; }
+  .rl > div + div { border-top: 1px solid var(--line); }
+  .rl > div.c { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.9fr) auto; }
+  .rl .n { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .rl .n small { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 400; }
+  .rl .v { text-align: right; font-weight: 700; white-space: nowrap; }
+  .rl .v small { display: block; font-size: 0.78rem; font-weight: 400; }
+  .acct .wt { display: grid; grid-template-columns: minmax(0, 110px) auto; gap: 8px; align-items: center; margin-top: 3px; color: var(--muted); font-size: 0.74rem; }
   .gap .more { display: block; width: 100%; margin-top: 6px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 8px; cursor: pointer; }
   .gap .days { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
   .gap .days button { flex: none; border: 0; background: var(--soft); color: var(--ink); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 0.78rem; line-height: 1.35; text-align: left; cursor: pointer; }
@@ -694,13 +704,17 @@
     box.hidden = false;
     if (!items.length) { box.innerHTML = '<h2>계좌 전체</h2><div class="err">보유 종목이 없어요.</div>'; return; }
     const sorted = items.slice().sort((a, b) => (a.currency === b.currency ? 0 : a.currency === 'USD' ? -1 : 1) || (num(b.value) || 0) - (num(a.value) || 0));
+    const curSum = {};
+    for (const it of items) curSum[it.currency || 'USD'] = (curSum[it.currency || 'USD'] || 0) + (num(it.value) || 0);
     const rows = sorted.map(it => {
+      const w = curSum[it.currency || 'USD'] ? (num(it.value) || 0) / curSum[it.currency || 'USD'] * 100 : 0;
       const r = num(it.plRate), dr = num(it.dayRate);
       const isBot = data && String(it.symbol).toUpperCase() === String(data.symbol).toUpperCase();
       const tickerOnly = (it.currency || 'USD') === 'USD' && !/[가-힣]/.test(it.name || '');
       const on = String(it.symbol).toUpperCase() === ordSym;
       return `<div class="row${on ? ' on' : ''}" data-sym="${esc(String(it.symbol).toUpperCase())}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${esc(it.symbol)} 날짜별 주문 보기">${logo(it)}
-        <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div></div>
+        <div style="min-width:0"><div class="nm">${tickerOnly ? esc(it.symbol) : `${esc(it.name || it.symbol)}<span class="tk mono">${esc(it.symbol)}</span>`}${isBot ? '<span class="bot">봇</span>' : ''}</div>
+          <div class="wt"><span class="hb10 acc" style="width:${w}%"></span><span class="mono">비중 ${w.toFixed(0)}%</span></div></div>
         <div class="rt"><div class="mono">${money(it.value, it.currency)}</div>
           <div class="mono ${sign(r)}" style="font-size:0.85rem">${sgnMoney(it.pl, it.currency)} (${pct(r)})</div>
           ${dr === null ? '' : DROP_SYMS.includes(String(it.symbol).toUpperCase()) && dropLv(dr) ? `<div class="sub">${dropBadge(dr)}</div>`
@@ -1032,12 +1046,11 @@
     if (!hs.length) { el('history').innerHTML = fold('history', '완료한 사이클', '', '<div class="empty">아직 끝난 사이클이 없어요.</div>'); return; }
     const sec = {};
     if (secret) for (const c of secret.history || []) sec[c.id] = c;
-    const lastR = hs[hs.length - 1].returnPct;
-    el('history').innerHTML = fold('history', '완료한 사이클', `${hs.length}번 · 최근 <span class="${sign(lastR)}">${lastR === null ? '–' : pct(lastR, 1)}</span>`, `<div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>기간</th><th class="num">거래일</th><th class="num">수익률</th>${secret ? '<th class="num">실현손익</th>' : ''}</tr></thead>
-      <tbody>${hs.map(c => `<tr><td>${c.id}</td><td class="mono">${md(c.started)}~${md(c.ended)}</td><td class="num">${c.tradingDays}</td>
-        <td class="num mono ${sign(c.returnPct)}">${c.returnPct === null ? '–' : pct(c.returnPct, 1)}</td>
-        ${secret ? `<td class="num mono ${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`);
+    const lastR = hs[hs.length - 1].returnPct, hmax = Math.max(...hs.map(c => Math.abs(c.returnPct || 0)), 1e-6);
+    el('history').innerHTML = fold('history', '완료한 사이클', `${hs.length}번 · 최근 <span class="${sign(lastR)}">${lastR === null ? '–' : pct(lastR, 1)}</span>`, `<div class="rl">${hs.map(c => `<div class="c"><span class="no mono">${c.id}</span>
+        <div class="n mono">${md(c.started)}~${md(c.ended)}<small>${c.tradingDays}거래일</small></div>
+        <span>${c.returnPct === null ? '' : `<span class="hb10 ${c.returnPct >= 0 ? 'up' : 'down'}" style="width:${Math.abs(c.returnPct) / hmax * 100}%"></span>`}</span>
+        <div class="v mono ${sign(c.returnPct)}">${c.returnPct === null ? '–' : pct(c.returnPct, 1)}${secret ? `<small class="${sign(sec[c.id] && sec[c.id].profit)}">${sec[c.id] ? usd(sec[c.id].profit) : '–'}</small>` : ''}</div></div>`).join('')}</div>`);
   }
 
   // 가끔 보는 카드: 기본은 접힘(제목+핵심 숫자만), 펼친 상태는 이 브라우저에 기억. 1분마다 다시 그려도 유지
@@ -1186,15 +1199,12 @@
   function renderMarket(m) {
     const rows = (m.rows || []).filter(r => !isCmp(r));
     el('mkt-at').textContent = m.fetchedAt ? `${kst(m.fetchedAt)} 기준` : '';
-    el('mkt').innerHTML = `<div class="table-wrap"><table aria-label="선물·환율 시세">
-      <thead><tr><th>종목</th><th class="num">가격</th><th class="num">변동</th><th class="num">변동%</th><th class="num at">시간</th></tr></thead>
-      <tbody>${rows.map(r => r.error
-        ? `<tr><td class="name">${esc(r.name)}</td><td class="num muted" colspan="3">못 받았어요</td><td class="num at"></td></tr>`
-        : `<tr><td class="name">${esc(r.name)}</td>
-          <td class="num mono ${sign(r.change)}">${fmt(r.price)}</td>
-          <td class="num mono ${sign(r.change)}">${sgn(r.change, fmt(r.change))}</td>
-          <td class="num mono ${sign(r.change)}">${sgn(r.pct, fmt(r.pct) + '%')}</td>
-          <td class="num mono at">${r.at ? kst(r.at) : '–'}</td></tr>`).join('')}</tbody></table></div>`;
+    const pmax = Math.max(...rows.map(r => Math.abs(num(r.pct) || 0)), 0.01);
+    el('mkt').innerHTML = `<div class="rl" aria-label="선물·환율 시세">${rows.map(r => r.error
+      ? `<div><div class="n">${esc(r.name)}</div><span></span><div class="v muted">못 받았어요</div></div>`
+      : `<div title="${r.at ? kst(r.at) : ''}"><div class="n">${esc(r.name)}<small class="mono"><span class="${sign(r.change)}">${fmt(r.price)}</span> ${sgn(r.change, fmt(r.change))}</small></div>
+        <span><span class="hb10 ${num(r.change) >= 0 ? 'up' : 'down'}" style="width:${Math.abs(num(r.pct) || 0) / pmax * 100}%"></span></span>
+        <div class="v mono ${sign(r.change)}">${sgn(r.pct, fmt(r.pct) + '%')}</div></div>`).join('')}</div>`;
   }
   function demoMarket() {
     const at = h => `2026-10-07T${h}:00+09:00`;
