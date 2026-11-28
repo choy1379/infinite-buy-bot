@@ -1,0 +1,1 @@
+{"aliveAt": "2026-11-28T20:21:20.661070+00:00", "symbol": "TECL", "tunnel": {"alg": "pbkdf2-sha256/hmac-ctr", "iter": 200000, "salt": "6bup2kP3EZUTr7B6npE/wg==", "nonce": "ozxNeWkN8idYSda1Amn56w==", "ct": "5NpyWebKWZlTHxDYqHDvs4eI1fAh5GRUiIPaPOKhRSQYGJYP43OeNMONPXsLaRgkOSow45u/1h7r", "mac": "m03qpEzZy7UQWgFT1LwjUMJys+2tC70NHrs00Pj1Xl8="}}
